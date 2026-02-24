@@ -11,25 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getTransactionByTxID = `-- name: GetTransactionByTxID :one
-SELECT id, block_num, tx_num, tx_id, validation_code
-FROM transactions
-WHERE tx_id = $1
-`
-
-func (q *Queries) GetTransactionByTxID(ctx context.Context, txID []byte) (Transaction, error) {
-	row := q.db.QueryRow(ctx, getTransactionByTxID, txID)
-	var i Transaction
-	err := row.Scan(
-		&i.ID,
-		&i.BlockNum,
-		&i.TxNum,
-		&i.TxID,
-		&i.ValidationCode,
-	)
-	return i, err
-}
-
 const getTransactionID = `-- name: GetTransactionID :one
 SELECT id
 FROM transactions
@@ -48,7 +29,7 @@ func (q *Queries) GetTransactionID(ctx context.Context, arg GetTransactionIDPara
 	return id, err
 }
 
-const getTransactionsByBlock = `-- name: GetTransactionsByBlock :many
+const getValidationCodeByBlock = `-- name: GetValidationCodeByBlock :many
 SELECT id, block_num, tx_num, tx_id, validation_code
 FROM transactions
 WHERE block_num = $1
@@ -56,14 +37,14 @@ ORDER BY tx_num
 LIMIT $2 OFFSET $3
 `
 
-type GetTransactionsByBlockParams struct {
+type GetValidationCodeByBlockParams struct {
 	BlockNum int64 `json:"block_num"`
 	Limit    int32 `json:"limit"`
 	Offset   int32 `json:"offset"`
 }
 
-func (q *Queries) GetTransactionsByBlock(ctx context.Context, arg GetTransactionsByBlockParams) ([]Transaction, error) {
-	rows, err := q.db.Query(ctx, getTransactionsByBlock, arg.BlockNum, arg.Limit, arg.Offset)
+func (q *Queries) GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error) {
+	rows, err := q.db.Query(ctx, getValidationCodeByBlock, arg.BlockNum, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +67,25 @@ func (q *Queries) GetTransactionsByBlock(ctx context.Context, arg GetTransaction
 		return nil, err
 	}
 	return items, nil
+}
+
+const getValidationCodeByTxID = `-- name: GetValidationCodeByTxID :one
+SELECT id, block_num, tx_num, tx_id, validation_code
+FROM transactions
+WHERE tx_id = $1
+`
+
+func (q *Queries) GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error) {
+	row := q.db.QueryRow(ctx, getValidationCodeByTxID, txID)
+	var i Transaction
+	err := row.Scan(
+		&i.ID,
+		&i.BlockNum,
+		&i.TxNum,
+		&i.TxID,
+		&i.ValidationCode,
+	)
+	return i, err
 }
 
 const insertTransaction = `-- name: InsertTransaction :one

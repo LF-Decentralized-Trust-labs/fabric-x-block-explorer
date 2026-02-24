@@ -4,14 +4,14 @@ VALUES ($1, $2, $3, $4)
 ON CONFLICT (block_num, tx_num) DO UPDATE SET tx_id = EXCLUDED.tx_id
 RETURNING id;
 
--- name: GetTransactionsByBlock :many
+-- name: GetValidationCodeByBlock :many
 SELECT id, block_num, tx_num, tx_id, validation_code
 FROM transactions
 WHERE block_num = $1
 ORDER BY tx_num
 LIMIT $2 OFFSET $3;
 
--- name: GetTransactionByTxID :one
+-- name: GetValidationCodeByTxID :one
 SELECT id, block_num, tx_num, tx_id, validation_code
 FROM transactions
 WHERE tx_id = $1;

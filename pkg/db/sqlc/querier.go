@@ -14,9 +14,9 @@ type Querier interface {
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
 	GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]GetReadsByTxRow, error)
-	GetTransactionByTxID(ctx context.Context, txID []byte) (Transaction, error)
 	GetTransactionID(ctx context.Context, arg GetTransactionIDParams) (int64, error)
-	GetTransactionsByBlock(ctx context.Context, arg GetTransactionsByBlockParams) ([]Transaction, error)
+	GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error)
+	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)
 	GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([]GetWritesByTxRow, error)
 	InsertBlock(ctx context.Context, arg InsertBlockParams) error
 	InsertTransaction(ctx context.Context, arg InsertTransactionParams) (int64, error)
