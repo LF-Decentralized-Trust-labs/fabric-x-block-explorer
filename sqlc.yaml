@@ -1,0 +1,13 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    schema: "pkg/db/schema.sql"
+    queries: "pkg/db/queries"
+    gen:
+      go:
+        package: "dbsqlc"
+        out: "pkg/db/sqlc"
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true
+        sql_package: "pgx/v5"
