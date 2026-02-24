@@ -21,7 +21,7 @@ jobs:
 
       - name: Install sqlc
         run: |
-          curl -L https://github.com/sqlc-dev/sqlc/releases/download/v1.27.0/sqlc_1.27.0_linux_amd64.tar.gz | tar xz
+          curl -L https://github.com/sqlc-dev/sqlc/releases/download/v1.30.0/sqlc_1.30.0_linux_amd64.tar.gz | tar xz
           sudo mv sqlc /usr/local/bin/
           sqlc version
 
