@@ -14,17 +14,16 @@ type Querier interface {
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
 	GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]GetReadsByTxRow, error)
-	GetTransactionID(ctx context.Context, arg GetTransactionIDParams) (int64, error)
 	GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error)
 	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)
 	GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([]GetWritesByTxRow, error)
 	InsertBlock(ctx context.Context, arg InsertBlockParams) error
-	InsertTransaction(ctx context.Context, arg InsertTransactionParams) (int64, error)
-	InsertTxEndorsement(ctx context.Context, arg InsertTxEndorsementParams) error
-	InsertTxNamespace(ctx context.Context, arg InsertTxNamespaceParams) (int64, error)
-	InsertTxRead(ctx context.Context, arg InsertTxReadParams) error
-	InsertTxWrite(ctx context.Context, arg InsertTxWriteParams) error
-	UpsertNamespacePolicy(ctx context.Context, arg UpsertNamespacePolicyParams) error
+	InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults
+	InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorsementParams) *InsertTxEndorsementBatchResults
+	InsertTxNamespace(ctx context.Context, arg []InsertTxNamespaceParams) *InsertTxNamespaceBatchResults
+	InsertTxRead(ctx context.Context, arg []InsertTxReadParams) *InsertTxReadBatchResults
+	InsertTxWrite(ctx context.Context, arg []InsertTxWriteParams) *InsertTxWriteBatchResults
+	UpsertNamespacePolicy(ctx context.Context, arg []UpsertNamespacePolicyParams) *UpsertNamespacePolicyBatchResults
 }
 
 var _ Querier = (*Queries)(nil)

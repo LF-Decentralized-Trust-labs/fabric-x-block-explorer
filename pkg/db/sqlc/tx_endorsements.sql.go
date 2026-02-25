@@ -12,12 +12,10 @@ import (
 )
 
 const getEndorsementsByTx = `-- name: GetEndorsementsByTx :many
-SELECT te.id, te.endorsement, te.msp_id, te.identity, tn.ns_id
-FROM tx_endorsements te
-JOIN tx_namespaces tn ON te.tx_namespace_id = tn.id
-JOIN transactions t ON tn.transaction_id = t.id
-WHERE t.block_num = $1 AND t.tx_num = $2
-ORDER BY te.id
+SELECT ns_id, endorsement, msp_id, identity
+FROM tx_endorsements
+WHERE block_num = $1 AND tx_num = $2
+ORDER BY ns_id, endorsement
 `
 
 type GetEndorsementsByTxParams struct {
@@ -26,11 +24,10 @@ type GetEndorsementsByTxParams struct {
 }
 
 type GetEndorsementsByTxRow struct {
-	ID          int64       `json:"id"`
+	NsID        string      `json:"ns_id"`
 	Endorsement []byte      `json:"endorsement"`
 	MspID       pgtype.Text `json:"msp_id"`
 	Identity    []byte      `json:"identity"`
-	NsID        string      `json:"ns_id"`
 }
 
 func (q *Queries) GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error) {
@@ -43,11 +40,10 @@ func (q *Queries) GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsBy
 	for rows.Next() {
 		var i GetEndorsementsByTxRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.NsID,
 			&i.Endorsement,
 			&i.MspID,
 			&i.Identity,
-			&i.NsID,
 		); err != nil {
 			return nil, err
 		}
@@ -57,26 +53,4 @@ func (q *Queries) GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsBy
 		return nil, err
 	}
 	return items, nil
-}
-
-const insertTxEndorsement = `-- name: InsertTxEndorsement :exec
-INSERT INTO tx_endorsements (tx_namespace_id, endorsement, msp_id, identity)
-VALUES ($1, $2, $3, $4)
-`
-
-type InsertTxEndorsementParams struct {
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Endorsement   []byte      `json:"endorsement"`
-	MspID         pgtype.Text `json:"msp_id"`
-	Identity      []byte      `json:"identity"`
-}
-
-func (q *Queries) InsertTxEndorsement(ctx context.Context, arg InsertTxEndorsementParams) error {
-	_, err := q.db.Exec(ctx, insertTxEndorsement,
-		arg.TxNamespaceID,
-		arg.Endorsement,
-		arg.MspID,
-		arg.Identity,
-	)
-	return err
 }

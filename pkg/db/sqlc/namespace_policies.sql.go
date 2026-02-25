@@ -10,7 +10,7 @@ import (
 )
 
 const getNamespacePolicies = `-- name: GetNamespacePolicies :many
-SELECT id, namespace, version, policy
+SELECT namespace, version, policy
 FROM namespace_policies
 WHERE namespace = $1
 ORDER BY version DESC
@@ -25,12 +25,7 @@ func (q *Queries) GetNamespacePolicies(ctx context.Context, namespace string) ([
 	items := []NamespacePolicy{}
 	for rows.Next() {
 		var i NamespacePolicy
-		if err := rows.Scan(
-			&i.ID,
-			&i.Namespace,
-			&i.Version,
-			&i.Policy,
-		); err != nil {
+		if err := rows.Scan(&i.Namespace, &i.Version, &i.Policy); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -39,21 +34,4 @@ func (q *Queries) GetNamespacePolicies(ctx context.Context, namespace string) ([
 		return nil, err
 	}
 	return items, nil
-}
-
-const upsertNamespacePolicy = `-- name: UpsertNamespacePolicy :exec
-INSERT INTO namespace_policies (namespace, version, policy)
-VALUES ($1, $2, $3)
-ON CONFLICT (namespace, version) DO UPDATE SET policy = EXCLUDED.policy
-`
-
-type UpsertNamespacePolicyParams struct {
-	Namespace string `json:"namespace"`
-	Version   int64  `json:"version"`
-	Policy    []byte `json:"policy"`
-}
-
-func (q *Queries) UpsertNamespacePolicy(ctx context.Context, arg UpsertNamespacePolicyParams) error {
-	_, err := q.db.Exec(ctx, upsertNamespacePolicy, arg.Namespace, arg.Version, arg.Policy)
-	return err
 }

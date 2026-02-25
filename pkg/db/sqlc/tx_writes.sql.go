@@ -12,18 +12,10 @@ import (
 )
 
 const getWritesByTx = `-- name: GetWritesByTx :many
-SELECT 
-    tw.id,
-    tw.key,
-    tw.value,
-    tw.is_blind_write,
-    tw.read_version,
-    tn.ns_id
-FROM tx_writes tw
-JOIN tx_namespaces tn ON tw.tx_namespace_id = tn.id
-JOIN transactions t ON tn.transaction_id = t.id
-WHERE t.block_num = $1 AND t.tx_num = $2
-ORDER BY tw.id
+SELECT ns_id, key, value, is_blind_write, read_version
+FROM tx_writes
+WHERE block_num = $1 AND tx_num = $2
+ORDER BY ns_id, key
 LIMIT $3 OFFSET $4
 `
 
@@ -35,12 +27,11 @@ type GetWritesByTxParams struct {
 }
 
 type GetWritesByTxRow struct {
-	ID           int64       `json:"id"`
+	NsID         string      `json:"ns_id"`
 	Key          []byte      `json:"key"`
 	Value        []byte      `json:"value"`
 	IsBlindWrite bool        `json:"is_blind_write"`
 	ReadVersion  pgtype.Int8 `json:"read_version"`
-	NsID         string      `json:"ns_id"`
 }
 
 func (q *Queries) GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([]GetWritesByTxRow, error) {
@@ -58,12 +49,11 @@ func (q *Queries) GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([
 	for rows.Next() {
 		var i GetWritesByTxRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.NsID,
 			&i.Key,
 			&i.Value,
 			&i.IsBlindWrite,
 			&i.ReadVersion,
-			&i.NsID,
 		); err != nil {
 			return nil, err
 		}

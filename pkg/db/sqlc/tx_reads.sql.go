@@ -12,12 +12,10 @@ import (
 )
 
 const getReadsByTx = `-- name: GetReadsByTx :many
-SELECT tr.id, tr.key, tr.version, tr.is_read_write, tn.ns_id
-FROM tx_reads tr
-JOIN tx_namespaces tn ON tr.tx_namespace_id = tn.id
-JOIN transactions t ON tn.transaction_id = t.id
-WHERE t.block_num = $1 AND t.tx_num = $2
-ORDER BY tr.id
+SELECT ns_id, key, version, is_read_write
+FROM tx_reads
+WHERE block_num = $1 AND tx_num = $2
+ORDER BY ns_id, key
 `
 
 type GetReadsByTxParams struct {
@@ -26,11 +24,10 @@ type GetReadsByTxParams struct {
 }
 
 type GetReadsByTxRow struct {
-	ID          int64       `json:"id"`
+	NsID        string      `json:"ns_id"`
 	Key         []byte      `json:"key"`
 	Version     pgtype.Int8 `json:"version"`
 	IsReadWrite bool        `json:"is_read_write"`
-	NsID        string      `json:"ns_id"`
 }
 
 func (q *Queries) GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]GetReadsByTxRow, error) {
@@ -43,11 +40,10 @@ func (q *Queries) GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]G
 	for rows.Next() {
 		var i GetReadsByTxRow
 		if err := rows.Scan(
-			&i.ID,
+			&i.NsID,
 			&i.Key,
 			&i.Version,
 			&i.IsReadWrite,
-			&i.NsID,
 		); err != nil {
 			return nil, err
 		}

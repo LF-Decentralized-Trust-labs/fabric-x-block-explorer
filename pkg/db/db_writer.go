@@ -69,6 +69,7 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 
 	q := dbsqlc.New(tx)
 
+	// Round-trip 1: insert the block header.
 	if err := q.InsertBlock(ctx, dbsqlc.InsertBlockParams{
 		BlockNum:     int64(pb.BlockInfo.Number),
 		TxCount:      int32(pb.Txns),
@@ -78,64 +79,63 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		return err
 	}
 
+	// Build flat param slices for all six batch inserts in a single pass.
+	txParams := make([]dbsqlc.InsertTransactionParams, 0, len(parsedData.Transactions))
+	var nsParams []dbsqlc.InsertTxNamespaceParams
+	var readParams []dbsqlc.InsertTxReadParams
+	var endorseParams []dbsqlc.InsertTxEndorsementParams
+	var writeParams []dbsqlc.InsertTxWriteParams
+	var policyParams []dbsqlc.UpsertNamespacePolicyParams
+
 	for _, txRec := range parsedData.Transactions {
 		txIDBytes, err := hex.DecodeString(txRec.TxID)
 		if err != nil {
 			return fmt.Errorf("failed to decode tx_id %s: %w", txRec.TxID, err)
 		}
-
-		txID, err := q.InsertTransaction(ctx, dbsqlc.InsertTransactionParams{
+		txParams = append(txParams, dbsqlc.InsertTransactionParams{
 			BlockNum:       int64(txRec.BlockNum),
 			TxNum:          int64(txRec.TxNum),
 			TxID:           txIDBytes,
 			ValidationCode: int64(txRec.ValidationCode),
 		})
-		if err != nil {
-			return err
-		}
 
 		for _, ns := range txRec.Namespaces {
-			txNsID, err := q.InsertTxNamespace(ctx, dbsqlc.InsertTxNamespaceParams{
-				TransactionID: txID,
-				NsID:          ns.NsID,
-				NsVersion:     int64(ns.NsVersion),
+			nsParams = append(nsParams, dbsqlc.InsertTxNamespaceParams{
+				BlockNum:  int64(txRec.BlockNum),
+				TxNum:     int64(txRec.TxNum),
+				NsID:      ns.NsID,
+				NsVersion: int64(ns.NsVersion),
 			})
-			if err != nil {
-				return err
-			}
-
 			for _, r := range ns.Reads {
-				if err := q.InsertTxRead(ctx, dbsqlc.InsertTxReadParams{
-					TxNamespaceID: txNsID,
-					Key:           []byte(r.Key),
-					Version:       util.PtrToNullableInt64(r.Version),
-					IsReadWrite:   r.IsReadWrite,
-				}); err != nil {
-					return err
-				}
+				readParams = append(readParams, dbsqlc.InsertTxReadParams{
+					BlockNum:    int64(txRec.BlockNum),
+					TxNum:       int64(txRec.TxNum),
+					NsID:        ns.NsID,
+					Key:         []byte(r.Key),
+					Version:     util.PtrToNullableInt64(r.Version),
+					IsReadWrite: r.IsReadWrite,
+				})
 			}
-
 			for _, e := range ns.Endorsements {
-				if err := q.InsertTxEndorsement(ctx, dbsqlc.InsertTxEndorsementParams{
-					TxNamespaceID: txNsID,
-					Endorsement:   e.Endorsement,
-					MspID:         util.PtrToNullableString(e.MspID),
-					Identity:      e.Identity,
-				}); err != nil {
-					return err
-				}
+				endorseParams = append(endorseParams, dbsqlc.InsertTxEndorsementParams{
+					BlockNum:    int64(txRec.BlockNum),
+					TxNum:       int64(txRec.TxNum),
+					NsID:        ns.NsID,
+					Endorsement: e.Endorsement,
+					MspID:       util.PtrToNullableString(e.MspID),
+					Identity:    e.Identity,
+				})
 			}
-
 			for _, w := range ns.Writes {
-				if err := q.InsertTxWrite(ctx, dbsqlc.InsertTxWriteParams{
-					TxNamespaceID: txNsID,
-					Key:           []byte(w.Key),
-					Value:         w.Value,
-					IsBlindWrite:  w.IsBlindWrite,
-					ReadVersion:   util.PtrToNullableInt64(w.ReadVersion),
-				}); err != nil {
-					return err
-				}
+				writeParams = append(writeParams, dbsqlc.InsertTxWriteParams{
+					BlockNum:     int64(txRec.BlockNum),
+					TxNum:        int64(txRec.TxNum),
+					NsID:         ns.NsID,
+					Key:          []byte(w.Key),
+					Value:        w.Value,
+					IsBlindWrite: w.IsBlindWrite,
+					ReadVersion:  util.PtrToNullableInt64(w.ReadVersion),
+				})
 			}
 		}
 	}
@@ -144,11 +144,50 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		if len(p.PolicyJSON) == 0 {
 			continue
 		}
-		if err := q.UpsertNamespacePolicy(ctx, dbsqlc.UpsertNamespacePolicyParams{
+		policyParams = append(policyParams, dbsqlc.UpsertNamespacePolicyParams{
 			Namespace: p.Namespace,
 			Version:   int64(p.Version),
 			Policy:    p.PolicyJSON,
-		}); err != nil {
+		})
+	}
+
+	// execBatch drains a batchexec result set and returns the first error encountered.
+	execBatch := func(exec func(func(int, error))) error {
+		var batchErr error
+		exec(func(_ int, err error) {
+			if err != nil && batchErr == nil {
+				batchErr = err
+			}
+		})
+		return batchErr
+	}
+
+	// Round-trips 2–7: one SendBatch call per table.
+	if err := execBatch(q.InsertTransaction(ctx, txParams).Exec); err != nil {
+		return err
+	}
+	if len(nsParams) > 0 {
+		if err := execBatch(q.InsertTxNamespace(ctx, nsParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(readParams) > 0 {
+		if err := execBatch(q.InsertTxRead(ctx, readParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(endorseParams) > 0 {
+		if err := execBatch(q.InsertTxEndorsement(ctx, endorseParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(writeParams) > 0 {
+		if err := execBatch(q.InsertTxWrite(ctx, writeParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(policyParams) > 0 {
+		if err := execBatch(q.UpsertNamespacePolicy(ctx, policyParams).Exec); err != nil {
 			return err
 		}
 	}
