@@ -38,11 +38,8 @@ func TestWriteProcessedBlock(t *testing.T) {
 					{
 						NsID:      "mycc",
 						NsVersion: 1,
-						Reads: []types.ReadRecord{
-							{Key: "key1", Version: uint64Ptr(10), IsReadWrite: true},
-						},
-						Writes: []types.WriteRecord{
-							{Key: "key1", Value: []byte("value1"), IsBlindWrite: false, ReadVersion: uint64Ptr(10)},
+						ReadWrites: []types.ReadWriteRecord{
+							{Key: "key1", ReadVersion: uint64Ptr(10), Value: []byte("value1")},
 						},
 						Endorsements: []types.EndorsementRecord{
 							{Endorsement: []byte("endorsement_sig"), MspID: strPtr("Org1MSP"), Identity: []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`)},
@@ -111,9 +108,9 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 					{
 						NsID:      "testcc",
 						NsVersion: 1,
-						Writes: []types.WriteRecord{
+						BlindWrites: []types.BlindWriteRecord{
 							// Blind writes have no read version
-							{Key: "blindkey", Value: []byte("blindvalue"), IsBlindWrite: true, ReadVersion: nil},
+							{Key: "blindkey", Value: []byte("blindvalue")},
 						},
 					},
 				},
@@ -138,16 +135,15 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	// Verify block exists
 	env.AssertBlockExists(t, 2)
 
-	// Query the write to verify blind write flag
-	var isBlindWrite bool
+	// Query the write to verify it landed in the blind_writes table
+	var key []byte
 	err = env.Pool.QueryRow(ctx, `
-		SELECT is_blind_write 
-		FROM tx_writes tw
-		JOIN tx_namespaces tn ON tw.tx_namespace_id = tn.id
-		WHERE tn.ns_id = $1 AND tw.key = $2
-	`, "testcc", []byte("blindkey")).Scan(&isBlindWrite)
+		SELECT key
+		FROM tx_blind_writes
+		WHERE ns_id = $1 AND key = $2
+	`, "testcc", []byte("blindkey")).Scan(&key)
 	require.NoError(t, err)
-	assert.True(t, isBlindWrite)
+	assert.Equal(t, []byte("blindkey"), key)
 }
 
 // TestWriteProcessedBlockMultipleTransactions tests multiple transactions in one block
@@ -166,8 +162,8 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 					{
 						NsID:      "cc1",
 						NsVersion: 1,
-						Writes: []types.WriteRecord{
-							{Key: "key1", Value: []byte("val1"), IsBlindWrite: false},
+						BlindWrites: []types.BlindWriteRecord{
+							{Key: "key1", Value: []byte("val1")},
 						},
 					},
 				},
@@ -181,8 +177,8 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 					{
 						NsID:      "cc2",
 						NsVersion: 1,
-						Writes: []types.WriteRecord{
-							{Key: "key2", Value: []byte("val2"), IsBlindWrite: false},
+						BlindWrites: []types.BlindWriteRecord{
+							{Key: "key2", Value: []byte("val2")},
 						},
 					},
 				},

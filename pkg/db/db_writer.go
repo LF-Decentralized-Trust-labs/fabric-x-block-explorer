@@ -79,12 +79,13 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		return err
 	}
 
-	// Build flat param slices for all six batch inserts in a single pass.
+	// Build flat param slices for all batch inserts in a single pass.
 	txParams := make([]dbsqlc.InsertTransactionParams, 0, len(parsedData.Transactions))
 	var nsParams []dbsqlc.InsertTxNamespaceParams
-	var readParams []dbsqlc.InsertTxReadParams
+	var readOnlyParams []dbsqlc.InsertReadOnlyParams
+	var readWriteParams []dbsqlc.InsertReadWriteParams
+	var blindWriteParams []dbsqlc.InsertBlindWriteParams
 	var endorseParams []dbsqlc.InsertTxEndorsementParams
-	var writeParams []dbsqlc.InsertTxWriteParams
 	var policyParams []dbsqlc.UpsertNamespacePolicyParams
 
 	for _, txRec := range parsedData.Transactions {
@@ -106,14 +107,32 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 				NsID:      ns.NsID,
 				NsVersion: int64(ns.NsVersion),
 			})
-			for _, r := range ns.Reads {
-				readParams = append(readParams, dbsqlc.InsertTxReadParams{
+			for _, r := range ns.ReadsOnly {
+				readOnlyParams = append(readOnlyParams, dbsqlc.InsertReadOnlyParams{
+					BlockNum: int64(txRec.BlockNum),
+					TxNum:    int64(txRec.TxNum),
+					NsID:     ns.NsID,
+					Key:      []byte(r.Key),
+					Version:  util.PtrToNullableInt64(r.Version),
+				})
+			}
+			for _, rw := range ns.ReadWrites {
+				readWriteParams = append(readWriteParams, dbsqlc.InsertReadWriteParams{
 					BlockNum:    int64(txRec.BlockNum),
 					TxNum:       int64(txRec.TxNum),
 					NsID:        ns.NsID,
-					Key:         []byte(r.Key),
-					Version:     util.PtrToNullableInt64(r.Version),
-					IsReadWrite: r.IsReadWrite,
+					Key:         []byte(rw.Key),
+					ReadVersion: util.PtrToNullableInt64(rw.ReadVersion),
+					Value:       rw.Value,
+				})
+			}
+			for _, bw := range ns.BlindWrites {
+				blindWriteParams = append(blindWriteParams, dbsqlc.InsertBlindWriteParams{
+					BlockNum: int64(txRec.BlockNum),
+					TxNum:    int64(txRec.TxNum),
+					NsID:     ns.NsID,
+					Key:      []byte(bw.Key),
+					Value:    bw.Value,
 				})
 			}
 			for _, e := range ns.Endorsements {
@@ -124,17 +143,6 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 					Endorsement: e.Endorsement,
 					MspID:       util.PtrToNullableString(e.MspID),
 					Identity:    e.Identity,
-				})
-			}
-			for _, w := range ns.Writes {
-				writeParams = append(writeParams, dbsqlc.InsertTxWriteParams{
-					BlockNum:     int64(txRec.BlockNum),
-					TxNum:        int64(txRec.TxNum),
-					NsID:         ns.NsID,
-					Key:          []byte(w.Key),
-					Value:        w.Value,
-					IsBlindWrite: w.IsBlindWrite,
-					ReadVersion:  util.PtrToNullableInt64(w.ReadVersion),
 				})
 			}
 		}
@@ -162,7 +170,7 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		return batchErr
 	}
 
-	// Round-trips 2–7: one SendBatch call per table.
+	// One SendBatch call per table.
 	if err := execBatch(q.InsertTransaction(ctx, txParams).Exec); err != nil {
 		return err
 	}
@@ -171,18 +179,23 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 			return err
 		}
 	}
-	if len(readParams) > 0 {
-		if err := execBatch(q.InsertTxRead(ctx, readParams).Exec); err != nil {
+	if len(readOnlyParams) > 0 {
+		if err := execBatch(q.InsertReadOnly(ctx, readOnlyParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(readWriteParams) > 0 {
+		if err := execBatch(q.InsertReadWrite(ctx, readWriteParams).Exec); err != nil {
+			return err
+		}
+	}
+	if len(blindWriteParams) > 0 {
+		if err := execBatch(q.InsertBlindWrite(ctx, blindWriteParams).Exec); err != nil {
 			return err
 		}
 	}
 	if len(endorseParams) > 0 {
 		if err := execBatch(q.InsertTxEndorsement(ctx, endorseParams).Exec); err != nil {
-			return err
-		}
-	}
-	if len(writeParams) > 0 {
-		if err := execBatch(q.InsertTxWrite(ctx, writeParams).Exec); err != nil {
 			return err
 		}
 	}

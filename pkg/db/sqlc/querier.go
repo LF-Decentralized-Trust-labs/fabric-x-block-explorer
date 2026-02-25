@@ -9,20 +9,22 @@ import (
 )
 
 type Querier interface {
+	GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTxParams) ([]GetBlindWritesByTxRow, error)
 	GetBlock(ctx context.Context, blockNum int64) (Block, error)
 	GetBlockHeight(ctx context.Context) (interface{}, error)
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
-	GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]GetReadsByTxRow, error)
+	GetReadWritesByTx(ctx context.Context, arg GetReadWritesByTxParams) ([]GetReadWritesByTxRow, error)
+	GetReadsOnlyByTx(ctx context.Context, arg GetReadsOnlyByTxParams) ([]GetReadsOnlyByTxRow, error)
 	GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error)
 	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)
-	GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([]GetWritesByTxRow, error)
+	InsertBlindWrite(ctx context.Context, arg []InsertBlindWriteParams) *InsertBlindWriteBatchResults
 	InsertBlock(ctx context.Context, arg InsertBlockParams) error
+	InsertReadOnly(ctx context.Context, arg []InsertReadOnlyParams) *InsertReadOnlyBatchResults
+	InsertReadWrite(ctx context.Context, arg []InsertReadWriteParams) *InsertReadWriteBatchResults
 	InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults
 	InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorsementParams) *InsertTxEndorsementBatchResults
 	InsertTxNamespace(ctx context.Context, arg []InsertTxNamespaceParams) *InsertTxNamespaceBatchResults
-	InsertTxRead(ctx context.Context, arg []InsertTxReadParams) *InsertTxReadBatchResults
-	InsertTxWrite(ctx context.Context, arg []InsertTxWriteParams) *InsertTxWriteBatchResults
 	UpsertNamespacePolicy(ctx context.Context, arg []UpsertNamespacePolicyParams) *UpsertNamespacePolicyBatchResults
 }
 

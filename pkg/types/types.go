@@ -45,24 +45,29 @@ type TxRecord struct {
 type TxNamespaceRecord struct {
 	NsID         string
 	NsVersion    uint64
-	Reads        []ReadRecord
-	Writes       []WriteRecord
+	ReadsOnly    []ReadOnlyRecord
+	ReadWrites   []ReadWriteRecord
+	BlindWrites  []BlindWriteRecord
 	Endorsements []EndorsementRecord
 }
 
-// ReadRecord represents a single read operation in a transaction namespace.
-type ReadRecord struct {
-	Key         string
-	Version     *uint64
-	IsReadWrite bool
+// ReadOnlyRecord represents a key that was read but not written (from ns.ReadsOnly).
+type ReadOnlyRecord struct {
+	Key     string
+	Version *uint64
 }
 
-// WriteRecord represents a single write or delete in the world state.
-type WriteRecord struct {
-	Key          string
-	Value        []byte
-	IsBlindWrite bool
-	ReadVersion  *uint64
+// ReadWriteRecord represents a key that was both read and written (from ns.ReadWrites).
+type ReadWriteRecord struct {
+	Key         string
+	ReadVersion *uint64
+	Value       []byte
+}
+
+// BlindWriteRecord represents a key that was written without a prior read (from ns.BlindWrites).
+type BlindWriteRecord struct {
+	Key   string
+	Value []byte
 }
 
 // EndorsementRecord represents a signature endorsement for a namespace.

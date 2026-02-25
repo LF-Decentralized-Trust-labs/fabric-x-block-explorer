@@ -17,6 +17,176 @@ var (
 	ErrBatchAlreadyClosed = errors.New("batch already closed")
 )
 
+const insertBlindWrite = `-- name: InsertBlindWrite :batchexec
+INSERT INTO tx_blind_writes (block_num, tx_num, ns_id, key, value)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertBlindWriteBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertBlindWriteParams struct {
+	BlockNum int64  `json:"block_num"`
+	TxNum    int64  `json:"tx_num"`
+	NsID     string `json:"ns_id"`
+	Key      []byte `json:"key"`
+	Value    []byte `json:"value"`
+}
+
+func (q *Queries) InsertBlindWrite(ctx context.Context, arg []InsertBlindWriteParams) *InsertBlindWriteBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.BlockNum,
+			a.TxNum,
+			a.NsID,
+			a.Key,
+			a.Value,
+		}
+		batch.Queue(insertBlindWrite, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertBlindWriteBatchResults{br, len(arg), false}
+}
+
+func (b *InsertBlindWriteBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertBlindWriteBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const insertReadOnly = `-- name: InsertReadOnly :batchexec
+INSERT INTO tx_reads_only (block_num, tx_num, ns_id, key, version)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertReadOnlyBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertReadOnlyParams struct {
+	BlockNum int64       `json:"block_num"`
+	TxNum    int64       `json:"tx_num"`
+	NsID     string      `json:"ns_id"`
+	Key      []byte      `json:"key"`
+	Version  pgtype.Int8 `json:"version"`
+}
+
+func (q *Queries) InsertReadOnly(ctx context.Context, arg []InsertReadOnlyParams) *InsertReadOnlyBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.BlockNum,
+			a.TxNum,
+			a.NsID,
+			a.Key,
+			a.Version,
+		}
+		batch.Queue(insertReadOnly, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertReadOnlyBatchResults{br, len(arg), false}
+}
+
+func (b *InsertReadOnlyBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertReadOnlyBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const insertReadWrite = `-- name: InsertReadWrite :batchexec
+INSERT INTO tx_read_writes (block_num, tx_num, ns_id, key, read_version, value)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertReadWriteBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertReadWriteParams struct {
+	BlockNum    int64       `json:"block_num"`
+	TxNum       int64       `json:"tx_num"`
+	NsID        string      `json:"ns_id"`
+	Key         []byte      `json:"key"`
+	ReadVersion pgtype.Int8 `json:"read_version"`
+	Value       []byte      `json:"value"`
+}
+
+func (q *Queries) InsertReadWrite(ctx context.Context, arg []InsertReadWriteParams) *InsertReadWriteBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.BlockNum,
+			a.TxNum,
+			a.NsID,
+			a.Key,
+			a.ReadVersion,
+			a.Value,
+		}
+		batch.Queue(insertReadWrite, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertReadWriteBatchResults{br, len(arg), false}
+}
+
+func (b *InsertReadWriteBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertReadWriteBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const insertTransaction = `-- name: InsertTransaction :batchexec
 INSERT INTO transactions (block_num, tx_num, tx_id, validation_code)
 VALUES ($1, $2, $3, $4)
@@ -181,124 +351,6 @@ func (b *InsertTxNamespaceBatchResults) Exec(f func(int, error)) {
 }
 
 func (b *InsertTxNamespaceBatchResults) Close() error {
-	b.closed = true
-	return b.br.Close()
-}
-
-const insertTxRead = `-- name: InsertTxRead :batchexec
-INSERT INTO tx_reads (block_num, tx_num, ns_id, key, version, is_read_write)
-VALUES ($1, $2, $3, $4, $5, $6)
-`
-
-type InsertTxReadBatchResults struct {
-	br     pgx.BatchResults
-	tot    int
-	closed bool
-}
-
-type InsertTxReadParams struct {
-	BlockNum    int64       `json:"block_num"`
-	TxNum       int64       `json:"tx_num"`
-	NsID        string      `json:"ns_id"`
-	Key         []byte      `json:"key"`
-	Version     pgtype.Int8 `json:"version"`
-	IsReadWrite bool        `json:"is_read_write"`
-}
-
-func (q *Queries) InsertTxRead(ctx context.Context, arg []InsertTxReadParams) *InsertTxReadBatchResults {
-	batch := &pgx.Batch{}
-	for _, a := range arg {
-		vals := []interface{}{
-			a.BlockNum,
-			a.TxNum,
-			a.NsID,
-			a.Key,
-			a.Version,
-			a.IsReadWrite,
-		}
-		batch.Queue(insertTxRead, vals...)
-	}
-	br := q.db.SendBatch(ctx, batch)
-	return &InsertTxReadBatchResults{br, len(arg), false}
-}
-
-func (b *InsertTxReadBatchResults) Exec(f func(int, error)) {
-	defer b.br.Close()
-	for t := 0; t < b.tot; t++ {
-		if b.closed {
-			if f != nil {
-				f(t, ErrBatchAlreadyClosed)
-			}
-			continue
-		}
-		_, err := b.br.Exec()
-		if f != nil {
-			f(t, err)
-		}
-	}
-}
-
-func (b *InsertTxReadBatchResults) Close() error {
-	b.closed = true
-	return b.br.Close()
-}
-
-const insertTxWrite = `-- name: InsertTxWrite :batchexec
-INSERT INTO tx_writes (block_num, tx_num, ns_id, key, value, is_blind_write, read_version)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type InsertTxWriteBatchResults struct {
-	br     pgx.BatchResults
-	tot    int
-	closed bool
-}
-
-type InsertTxWriteParams struct {
-	BlockNum     int64       `json:"block_num"`
-	TxNum        int64       `json:"tx_num"`
-	NsID         string      `json:"ns_id"`
-	Key          []byte      `json:"key"`
-	Value        []byte      `json:"value"`
-	IsBlindWrite bool        `json:"is_blind_write"`
-	ReadVersion  pgtype.Int8 `json:"read_version"`
-}
-
-func (q *Queries) InsertTxWrite(ctx context.Context, arg []InsertTxWriteParams) *InsertTxWriteBatchResults {
-	batch := &pgx.Batch{}
-	for _, a := range arg {
-		vals := []interface{}{
-			a.BlockNum,
-			a.TxNum,
-			a.NsID,
-			a.Key,
-			a.Value,
-			a.IsBlindWrite,
-			a.ReadVersion,
-		}
-		batch.Queue(insertTxWrite, vals...)
-	}
-	br := q.db.SendBatch(ctx, batch)
-	return &InsertTxWriteBatchResults{br, len(arg), false}
-}
-
-func (b *InsertTxWriteBatchResults) Exec(f func(int, error)) {
-	defer b.br.Close()
-	for t := 0; t < b.tot; t++ {
-		if b.closed {
-			if f != nil {
-				f(t, ErrBatchAlreadyClosed)
-			}
-			continue
-		}
-		_, err := b.br.Exec()
-		if f != nil {
-			f(t, err)
-		}
-	}
-}
-
-func (b *InsertTxWriteBatchResults) Close() error {
 	b.closed = true
 	return b.br.Close()
 }

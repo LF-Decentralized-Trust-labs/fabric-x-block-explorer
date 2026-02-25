@@ -19,11 +19,3 @@ WHERE tx_id = $1;
 INSERT INTO tx_namespaces (block_num, tx_num, ns_id, ns_version)
 VALUES ($1, $2, $3, $4)
 ON CONFLICT (block_num, tx_num, ns_id) DO UPDATE SET ns_version = EXCLUDED.ns_version;
-
--- name: InsertTxRead :batchexec
-INSERT INTO tx_reads (block_num, tx_num, ns_id, key, version, is_read_write)
-VALUES ($1, $2, $3, $4, $5, $6);
-
--- name: InsertTxWrite :batchexec
-INSERT INTO tx_writes (block_num, tx_num, ns_id, key, value, is_blind_write, read_version)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
