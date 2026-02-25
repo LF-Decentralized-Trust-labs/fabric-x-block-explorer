@@ -18,7 +18,6 @@ type ParsedBlockData struct {
 
 // ProcessedBlock wraps parsed block data with metadata for persistence.
 type ProcessedBlock struct {
-	Number    uint64
 	Txns      int
 	Data      any
 	BlockInfo *BlockInfo
