@@ -12,8 +12,7 @@ test-no-db: ## Run tests that don't require database
 	@echo "Running tests without database requirement..."
 	go test -v -count=1 \
 		./pkg/types/... \
-		./pkg/util/... \
-		./pkg/constants/...
+		./pkg/util/...
 
 test-requires-db: ## Run tests that require database (uses testcontainers by default)
 	@echo "Running tests that require database..."
