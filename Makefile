@@ -13,7 +13,6 @@ test-no-db: ## Run tests that don't require database
 	go test -v -count=1 \
 		./pkg/types/... \
 		./pkg/util/... \
-		./pkg/logging/... \
 		./pkg/constants/...
 
 test-requires-db: ## Run tests that require database (uses testcontainers by default)

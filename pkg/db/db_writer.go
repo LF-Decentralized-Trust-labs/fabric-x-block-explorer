@@ -13,14 +13,14 @@ import (
 	"fmt"
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/logging"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
+	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var logger = logging.New("db")
+var logger = flogging.MustGetLogger("db")
 
 type BlockWriter struct {
 	pool *pgxpool.Pool
