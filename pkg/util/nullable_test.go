@@ -173,7 +173,7 @@ func TestPtrToNullableString(t *testing.T) {
 	}
 }
 
-// Helper function to create pointers
+// Helper function to create pointers.
 func ptr[T any](v T) *T {
 	return &v
 }

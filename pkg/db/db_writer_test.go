@@ -12,17 +12,17 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-// TestWriteProcessedBlock tests writing a complete block with all components
+// TestWriteProcessedBlock tests writing a complete block with all components.
 func TestWriteProcessedBlock(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
 
-	// Create test data
 	txID := "abc123def456"
 	txIDBytes, err := hex.DecodeString(txID)
 	require.NoError(t, err)
@@ -42,7 +42,11 @@ func TestWriteProcessedBlock(t *testing.T) {
 							{Key: "key1", ReadVersion: uint64Ptr(10), Value: []byte("value1")},
 						},
 						Endorsements: []types.EndorsementRecord{
-							{Endorsement: []byte("endorsement_sig"), MspID: strPtr("Org1MSP"), Identity: []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`)},
+							{
+								Endorsement: []byte("endorsement_sig"),
+								MspID:       strPtr("Org1MSP"),
+								Identity:    []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`),
+							},
 						},
 					},
 				},
@@ -67,12 +71,10 @@ func TestWriteProcessedBlock(t *testing.T) {
 		Txns: 1,
 	}
 
-	// Write the block
 	writer := NewBlockWriter(env.Pool)
 	err = writer.WriteProcessedBlock(ctx, processedBlock)
 	require.NoError(t, err)
 
-	// Verify block was written
 	block, err := env.Queries.GetBlock(ctx, 1)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), block.BlockNum)
@@ -80,18 +82,16 @@ func TestWriteProcessedBlock(t *testing.T) {
 	assert.Equal(t, []byte("prevhash"), block.PreviousHash)
 	assert.Equal(t, []byte("datahash"), block.DataHash)
 
-	// Verify transaction was written
 	tx, err := env.Queries.GetValidationCodeByTxID(ctx, txIDBytes)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), tx.BlockNum)
 	assert.Equal(t, int64(0), tx.TxNum)
 
-	// Verify counts
 	assert.Equal(t, int64(1), env.GetBlockCount(t))
 	assert.Equal(t, int64(1), env.GetTransactionCount(t))
 }
 
-// TestWriteProcessedBlockWithBlindWrites tests writing blind writes
+// TestWriteProcessedBlockWithBlindWrites tests writing blind writes.
 func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
@@ -132,10 +132,8 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
 	require.NoError(t, err)
 
-	// Verify block exists
 	env.AssertBlockExists(t, 2)
 
-	// Query the write to verify it landed in the blind_writes table
 	var key []byte
 	err = env.Pool.QueryRow(ctx, `
 		SELECT key
@@ -146,7 +144,7 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	assert.Equal(t, []byte("blindkey"), key)
 }
 
-// TestWriteProcessedBlockMultipleTransactions tests multiple transactions in one block
+// TestWriteProcessedBlockMultipleTransactions tests multiple transactions in one block.
 func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
@@ -200,28 +198,26 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
 	require.NoError(t, err)
 
-	// Verify both transactions were written
 	assert.Equal(t, int64(2), env.GetTransactionCount(t))
 
-	// Verify both namespaces exist
 	var count int64
 	err = env.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM tx_namespaces").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 }
 
-// TestWriteProcessedBlockNilBlock tests error handling for nil block
+// TestWriteProcessedBlockNilBlock tests error handling for nil block.
 func TestWriteProcessedBlockNilBlock(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
 
 	writer := NewBlockWriter(env.Pool)
 	err := writer.WriteProcessedBlock(ctx, nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nil")
 }
 
-// TestWriteProcessedBlockInvalidData tests error handling for invalid data type
+// TestWriteProcessedBlockInvalidData tests error handling for invalid data type.
 func TestWriteProcessedBlockInvalidData(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
@@ -236,11 +232,11 @@ func TestWriteProcessedBlockInvalidData(t *testing.T) {
 
 	writer := NewBlockWriter(env.Pool)
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not *types.ParsedBlockData")
 }
 
-// TestWriteProcessedBlockWithPolicies tests policy upsert functionality
+// TestWriteProcessedBlockWithPolicies tests policy upsert functionality.
 func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
@@ -272,14 +268,12 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
 	require.NoError(t, err)
 
-	// Verify policy was written
 	policies, err := env.Queries.GetNamespacePolicies(ctx, "mycc")
 	require.NoError(t, err)
 	assert.Len(t, policies, 1)
 	assert.Equal(t, "mycc", policies[0].Namespace)
 	assert.Equal(t, int64(1), policies[0].Version)
 
-	// Test upsert - update with new version
 	parsedData2 := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{},
 		Policies: []types.NamespacePolicyRecord{
@@ -304,18 +298,16 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 	err = writer.WriteProcessedBlock(ctx, processedBlock2)
 	require.NoError(t, err)
 
-	// Verify policy was updated (should have 2 versions now)
 	policies, err = env.Queries.GetNamespacePolicies(ctx, "mycc")
 	require.NoError(t, err)
 	assert.Len(t, policies, 2)
 }
 
-// TestWriteProcessedBlockRollbackOnError tests transaction rollback on error
+// TestWriteProcessedBlockRollbackOnError tests transaction rollback on error.
 func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
 
-	// Create block with invalid hex txID to trigger error
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
@@ -340,24 +332,21 @@ func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 
 	writer := NewBlockWriter(env.Pool)
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to decode tx_id")
 
-	// Verify block was NOT written (transaction rolled back)
 	env.AssertBlockNotExists(t, 6)
 }
 
-// TestNewBlockWriter tests BlockWriter constructors
+// TestNewBlockWriter tests BlockWriter constructors.
 func TestNewBlockWriter(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 
-	// Test NewBlockWriter with pool
 	writer1 := NewBlockWriter(env.Pool)
 	assert.NotNil(t, writer1)
 	assert.NotNil(t, writer1.pool)
 	assert.Nil(t, writer1.conn)
 
-	// Test NewBlockWriterFromConn with connection
 	ctx := context.Background()
 	conn, err := env.Pool.Acquire(ctx)
 	require.NoError(t, err)
@@ -369,7 +358,7 @@ func TestNewBlockWriter(t *testing.T) {
 	assert.Nil(t, writer2.pool)
 }
 
-// TestWriteProcessedBlockEmptyComponents tests writing block with empty slices
+// TestWriteProcessedBlockEmptyComponents tests writing block with empty slices.
 func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 	env := NewDatabaseTestEnv(t)
 	ctx := context.Background()
@@ -393,7 +382,6 @@ func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 	err := writer.WriteProcessedBlock(ctx, processedBlock)
 	require.NoError(t, err)
 
-	// Verify empty block was written
 	env.AssertBlockExists(t, 7)
 	assert.Equal(t, int64(0), env.GetTransactionCount(t))
 }

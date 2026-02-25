@@ -8,7 +8,7 @@ package util
 
 import "github.com/jackc/pgx/v5/pgtype"
 
-// NullableInt64ToPtr converts a pgtype.Int8 to *int64
+// NullableInt64ToPtr converts a pgtype.Int8 to *int64.
 func NullableInt64ToPtr(v pgtype.Int8) *int64 {
 	if !v.Valid {
 		return nil
@@ -16,7 +16,7 @@ func NullableInt64ToPtr(v pgtype.Int8) *int64 {
 	return &v.Int64
 }
 
-// NullableStringToPtr converts a pgtype.Text to *string
+// NullableStringToPtr converts a pgtype.Text to *string.
 func NullableStringToPtr(v pgtype.Text) *string {
 	if !v.Valid {
 		return nil
@@ -24,15 +24,15 @@ func NullableStringToPtr(v pgtype.Text) *string {
 	return &v.String
 }
 
-// PtrToNullableInt64 converts *uint64 to pgtype.Int8
+// PtrToNullableInt64 converts *uint64 to pgtype.Int8.
 func PtrToNullableInt64(v *uint64) pgtype.Int8 {
 	if v == nil {
 		return pgtype.Int8{Valid: false}
 	}
-	return pgtype.Int8{Int64: int64(*v), Valid: true}
+	return pgtype.Int8{Int64: int64(*v), Valid: true} //nolint:gosec // version numbers fit in int64
 }
 
-// PtrToNullableString converts *string to pgtype.Text
+// PtrToNullableString converts *string to pgtype.Text.
 func PtrToNullableString(v *string) pgtype.Text {
 	if v == nil {
 		return pgtype.Text{Valid: false}

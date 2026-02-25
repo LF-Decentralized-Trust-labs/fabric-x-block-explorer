@@ -13,11 +13,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Config holds PostgreSQL connection configuration.
 type Config struct {
 	Host     string
 	Port     int
 	User     string
-	Password string
+	Password string //nolint:gosec // intentional: field holds a connection credential
 	DBName   string
 	SSLMode  string
 }

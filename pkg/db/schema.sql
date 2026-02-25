@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS blocks (
     data_hash BYTEA
 );
 
--- Natural composite PK; no synthetic surrogate needed.
 CREATE TABLE IF NOT EXISTS transactions (
     block_num BIGINT NOT NULL REFERENCES blocks(block_num),
     tx_num    BIGINT NOT NULL,
@@ -14,7 +13,6 @@ CREATE TABLE IF NOT EXISTS transactions (
     PRIMARY KEY (block_num, tx_num)
 );
 
--- Natural composite PK; FK references transactions' natural key.
 CREATE TABLE IF NOT EXISTS tx_namespaces (
     block_num  BIGINT NOT NULL,
     tx_num     BIGINT NOT NULL,
@@ -69,7 +67,6 @@ CREATE TABLE IF NOT EXISTS tx_endorsements (
     FOREIGN KEY (block_num, tx_num, ns_id) REFERENCES tx_namespaces(block_num, tx_num, ns_id)
 );
 
--- Natural composite PK; (namespace, version) is already unique.
 CREATE TABLE IF NOT EXISTS namespace_policies (
     namespace TEXT   NOT NULL,
     version   BIGINT NOT NULL,

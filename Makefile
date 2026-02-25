@@ -1,12 +1,17 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc test test-no-db test-requires-db test-all coverage clean help
+.PHONY: sqlc lint test test-no-db test-requires-db test-all coverage clean help
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."
 	sqlc generate
 	@echo "✅ SQLC code generation complete"
+
+lint: ## Run golangci-lint
+	@echo "Running linter..."
+	golangci-lint run ./...
+	@echo "✅ Lint passed"
 
 test-no-db: ## Run tests that don't require database
 	@echo "Running tests without database requirement..."

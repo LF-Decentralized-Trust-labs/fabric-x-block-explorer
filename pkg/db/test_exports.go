@@ -11,10 +11,11 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/dbtest"
-	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
+
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/dbtest"
+	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
 
 //go:embed schema.sql
@@ -83,7 +84,7 @@ func (env *DatabaseTestEnv) GetBlockCount(t *testing.T) int64 {
 	return count
 }
 
-// GetTransactionCount returns the total number of transactions in the database
+// GetTransactionCount returns the total number of transactions in the database.
 func (env *DatabaseTestEnv) GetTransactionCount(t *testing.T) int64 {
 	t.Helper()
 

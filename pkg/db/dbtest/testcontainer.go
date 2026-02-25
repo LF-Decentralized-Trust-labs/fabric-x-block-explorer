@@ -21,13 +21,13 @@ import (
 )
 
 const (
-	// PostgreSQL configuration
+	// PostgreSQL configuration.
 	testDBName     = "explorer_test"
 	testDBUser     = "postgres"
 	testDBPassword = "postgres"
 )
 
-// TestContainer holds the PostgreSQL testcontainer instance
+// TestContainer holds the PostgreSQL testcontainer instance.
 type TestContainer struct {
 	Container *postgres.PostgresContainer
 	Pool      *pgxpool.Pool
@@ -37,25 +37,21 @@ type TestContainer struct {
 // PrepareTestEnv sets up a PostgreSQL testcontainer for testing.
 // It checks the DB_DEPLOYMENT environment variable:
 // - If set to "local", it connects to a local PostgreSQL instance
-// - Otherwise, it spins up a new testcontainer
-//
-// This follows the fabric-x-committer pattern for flexible test environments.
+// - Otherwise, it spins up a new testcontainer.
 func PrepareTestEnv(t *testing.T) *TestContainer {
 	t.Helper()
 
 	ctx := context.Background()
 
-	// Check if using local database
 	if os.Getenv("DB_DEPLOYMENT") == "local" {
-		return prepareLocalDB(t, ctx)
+		return prepareLocalDB(ctx, t)
 	}
 
-	// Use testcontainer
-	return prepareTestContainer(t, ctx)
+	return prepareTestContainer(ctx, t)
 }
 
 // prepareLocalDB connects to local postgres.
-func prepareLocalDB(t *testing.T, ctx context.Context) *TestContainer {
+func prepareLocalDB(ctx context.Context, t *testing.T) *TestContainer {
 	t.Helper()
 
 	dsn := fmt.Sprintf(
@@ -72,7 +68,7 @@ func prepareLocalDB(t *testing.T, ctx context.Context) *TestContainer {
 	require.NoError(t, err, "failed to ping local database")
 
 	// Clean all tables before each test
-	cleanDatabase(t, ctx, pool)
+	cleanDatabase(ctx, t, pool)
 
 	return &TestContainer{
 		Container: nil, // no container when using local
@@ -82,13 +78,14 @@ func prepareLocalDB(t *testing.T, ctx context.Context) *TestContainer {
 }
 
 // cleanDatabase drops all tables for a clean test state.
-func cleanDatabase(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
+func cleanDatabase(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 
 	_, err := pool.Exec(ctx, `
 		DROP TABLE IF EXISTS tx_endorsements CASCADE;
-		DROP TABLE IF EXISTS tx_writes CASCADE;
-		DROP TABLE IF EXISTS tx_reads CASCADE;
+		DROP TABLE IF EXISTS tx_blind_writes CASCADE;
+		DROP TABLE IF EXISTS tx_read_writes CASCADE;
+		DROP TABLE IF EXISTS tx_reads_only CASCADE;
 		DROP TABLE IF EXISTS tx_namespaces CASCADE;
 		DROP TABLE IF EXISTS transactions CASCADE;
 		DROP TABLE IF EXISTS namespace_policies CASCADE;
@@ -98,7 +95,7 @@ func cleanDatabase(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 }
 
 // prepareTestContainer creates a PostgreSQL testcontainer.
-func prepareTestContainer(t *testing.T, ctx context.Context) *TestContainer {
+func prepareTestContainer(ctx context.Context, t *testing.T) *TestContainer {
 	t.Helper()
 
 	postgresContainer, err := postgres.Run(ctx,
@@ -130,7 +127,7 @@ func prepareTestContainer(t *testing.T, ctx context.Context) *TestContainer {
 	}
 }
 
-// Close cleans up the test database resources
+// Close cleans up the test database resources.
 func (tc *TestContainer) Close(t *testing.T) {
 	t.Helper()
 

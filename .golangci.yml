@@ -1,0 +1,153 @@
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+version: "2"
+linters:
+  enable:
+    - containedctx
+    - contextcheck
+    - depguard
+    - dupl
+    - errname
+    - errorlint
+    - fatcontext
+    - forcetypeassert
+    - gocognit
+    - goconst
+    - gocritic
+    - godot
+    - gosec
+    - intrange
+    - ireturn
+    - lll
+    - maintidx
+    - mirror
+    - misspell
+    - nilerr
+    - nilnesserr
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - testifylint
+    - thelper
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
+    - goheader
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: github.com/pkg/errors is no longer maintained
+    errcheck:
+      check-type-assertions: true
+    errorlint:
+      errorf: true
+      asserts: false
+      comparison: true
+    fatcontext:
+      check-struct-pointers: true
+    gocognit:
+      min-complexity: 15
+    gosec:
+      excludes:
+        - G204
+        - G404
+        - G306
+    govet:
+      disable:
+        - fieldalignment
+      enable-all: true
+    ireturn:
+      allow:
+        - error
+        - empty
+        - anon
+        - stdlib
+        - generic
+        - (or|er)$
+        - T
+        - github.com/jackc/pgx/v5.Tx
+    lll:
+      line-length: 120
+    maintidx:
+      under: 20
+    nolintlint:
+      require-specific: true
+    revive:
+      enable-all-rules: true
+      rules:
+        - name: argument-limit
+          arguments:
+            - 4
+        - name: line-length-limit
+          arguments:
+            - 120
+        - name: file-header
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        - name: banned-characters
+          disabled: true
+        - name: cognitive-complexity
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: function-result-limit
+          arguments:
+            - 3
+        - name: add-constant
+          disabled: true
+        - name: unhandled-error
+          arguments:
+            - fmt.Printf
+            - fmt.Println
+            - strings.Builder.WriteString
+            - strings.Builder.WriteByte
+            - strings.Builder.Write
+        - name: confusing-naming
+          disabled: true
+        - name: var-naming
+          disabled: true
+        - name: comment-spacings
+          arguments:
+            - 'nolint:'
+    rowserrcheck:
+      packages:
+        - github.com/jackc/pgx/v5
+    goheader:
+      template: |-
+        Copyright IBM Corp. All Rights Reserved.
+
+        SPDX-License-Identifier: Apache-2.0
+exclusions:
+  generated: lax
+  warn-unused: true
+  presets:
+    - common-false-positives
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      extra-rules: true
+    goimports:
+      local-prefixes:
+        - github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer
+  exclusions:
+    generated: lax
+sort-order:
+  - file
+  - severity
+  - linter

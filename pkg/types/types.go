@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 )
 
-// ParsedBlockData contains all parsed data from a block, organized by transaction
+// ParsedBlockData contains all parsed data from a block, organized by transaction.
 type ParsedBlockData struct {
 	Transactions []TxRecord
 	Policies     []NamespacePolicyRecord
@@ -51,20 +51,20 @@ type TxNamespaceRecord struct {
 	Endorsements []EndorsementRecord
 }
 
-// ReadOnlyRecord represents a key that was read but not written (from ns.ReadsOnly).
+// ReadOnlyRecord represents a read-only operation within a namespace.
 type ReadOnlyRecord struct {
 	Key     string
 	Version *uint64
 }
 
-// ReadWriteRecord represents a key that was both read and written (from ns.ReadWrites).
+// ReadWriteRecord represents a read-write operation within a namespace.
 type ReadWriteRecord struct {
 	Key         string
 	ReadVersion *uint64
 	Value       []byte
 }
 
-// BlindWriteRecord represents a key that was written without a prior read (from ns.BlindWrites).
+// BlindWriteRecord represents a blind write operation within a namespace.
 type BlindWriteRecord struct {
 	Key   string
 	Value []byte
