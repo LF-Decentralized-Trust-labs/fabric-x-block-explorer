@@ -28,47 +28,27 @@ func TestWriteProcessedBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{
+		Transactions: []types.TxRecord{
 			{
 				BlockNum:       1,
 				TxNum:          0,
 				TxID:           txID,
-				NsID:           "mycc",
-				NsVersion:      1,
 				ValidationCode: 0,
-			},
-		},
-		Writes: []types.WriteRecord{
-			{
-				Namespace:      "mycc",
-				Key:            "key1",
-				BlockNum:       1,
-				TxNum:          0,
-				Value:          []byte("value1"),
-				TxID:           txID,
-				ValidationCode: 0,
-				IsBlindWrite:   false,
-				ReadVersion:    uint64Ptr(10),
-			},
-		},
-		Reads: []types.ReadRecord{
-			{
-				BlockNum:    1,
-				TxNum:       0,
-				NsID:        "mycc",
-				Key:         "key1",
-				Version:     uint64Ptr(10),
-				IsReadWrite: true,
-			},
-		},
-		Endorsements: []types.EndorsementRecord{
-			{
-				BlockNum:    1,
-				TxNum:       0,
-				NsID:        "mycc",
-				Endorsement: []byte("endorsement_sig"),
-				MspID:       strPtr("Org1MSP"),
-				Identity:    []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`),
+				Namespaces: []types.TxNamespaceRecord{
+					{
+						NsID:      "mycc",
+						NsVersion: 1,
+						Reads: []types.ReadRecord{
+							{Key: "key1", Version: uint64Ptr(10), IsReadWrite: true},
+						},
+						Writes: []types.WriteRecord{
+							{Key: "key1", Value: []byte("value1"), IsBlindWrite: false, ReadVersion: uint64Ptr(10)},
+						},
+						Endorsements: []types.EndorsementRecord{
+							{Endorsement: []byte("endorsement_sig"), MspID: strPtr("Org1MSP"), Identity: []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`)},
+						},
+					},
+				},
 			},
 		},
 		Policies: []types.NamespacePolicyRecord{
@@ -121,32 +101,24 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 
 	txID := "deadbeef"
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{
+		Transactions: []types.TxRecord{
 			{
 				BlockNum:       2,
 				TxNum:          0,
 				TxID:           txID,
-				NsID:           "testcc",
-				NsVersion:      1,
 				ValidationCode: 0,
+				Namespaces: []types.TxNamespaceRecord{
+					{
+						NsID:      "testcc",
+						NsVersion: 1,
+						Writes: []types.WriteRecord{
+							// Blind writes have no read version
+							{Key: "blindkey", Value: []byte("blindvalue"), IsBlindWrite: true, ReadVersion: nil},
+						},
+					},
+				},
 			},
 		},
-		Writes: []types.WriteRecord{
-			{
-				Namespace:      "testcc",
-				Key:            "blindkey",
-				BlockNum:       2,
-				TxNum:          0,
-				Value:          []byte("blindvalue"),
-				TxID:           txID,
-				ValidationCode: 0,
-				IsBlindWrite:   true,
-				ReadVersion:    nil, // Blind writes have no read version
-			},
-		},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
-		Policies:     []types.NamespacePolicyRecord{},
 	}
 
 	processedBlock := &types.ProcessedBlock{
@@ -184,49 +156,38 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 	ctx := context.Background()
 
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{
+		Transactions: []types.TxRecord{
 			{
 				BlockNum:       3,
 				TxNum:          0,
 				TxID:           "0000000000000000000000000000000000000000000000000000000000000001",
-				NsID:           "cc1",
-				NsVersion:      1,
 				ValidationCode: 0,
+				Namespaces: []types.TxNamespaceRecord{
+					{
+						NsID:      "cc1",
+						NsVersion: 1,
+						Writes: []types.WriteRecord{
+							{Key: "key1", Value: []byte("val1"), IsBlindWrite: false},
+						},
+					},
+				},
 			},
 			{
 				BlockNum:       3,
 				TxNum:          1,
 				TxID:           "0000000000000000000000000000000000000000000000000000000000000002",
-				NsID:           "cc2",
-				NsVersion:      1,
 				ValidationCode: 0,
+				Namespaces: []types.TxNamespaceRecord{
+					{
+						NsID:      "cc2",
+						NsVersion: 1,
+						Writes: []types.WriteRecord{
+							{Key: "key2", Value: []byte("val2"), IsBlindWrite: false},
+						},
+					},
+				},
 			},
 		},
-		Writes: []types.WriteRecord{
-			{
-				Namespace:      "cc1",
-				Key:            "key1",
-				BlockNum:       3,
-				TxNum:          0,
-				Value:          []byte("val1"),
-				TxID:           "0000000000000000000000000000000000000000000000000000000000000001",
-				ValidationCode: 0,
-				IsBlindWrite:   false,
-			},
-			{
-				Namespace:      "cc2",
-				Key:            "key2",
-				BlockNum:       3,
-				TxNum:          1,
-				Value:          []byte("val2"),
-				TxID:           "0000000000000000000000000000000000000000000000000000000000000002",
-				ValidationCode: 0,
-				IsBlindWrite:   false,
-			},
-		},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
-		Policies:     []types.NamespacePolicyRecord{},
 	}
 
 	processedBlock := &types.ProcessedBlock{
@@ -291,10 +252,7 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 	policyJSON := json.RawMessage(`{"policy_bytes":"base64encodedpolicy"}`)
 
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{},
-		Writes:       []types.WriteRecord{},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
+		Transactions: []types.TxRecord{},
 		Policies: []types.NamespacePolicyRecord{
 			{
 				Namespace:  "mycc",
@@ -327,10 +285,7 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 
 	// Test upsert - update with new version
 	parsedData2 := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{},
-		Writes:       []types.WriteRecord{},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
+		Transactions: []types.TxRecord{},
 		Policies: []types.NamespacePolicyRecord{
 			{
 				Namespace:  "mycc",
@@ -366,20 +321,15 @@ func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 
 	// Create block with invalid hex txID to trigger error
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{
+		Transactions: []types.TxRecord{
 			{
 				BlockNum:       6,
 				TxNum:          0,
 				TxID:           "invalid_hex_ZZZ", // Invalid hex string
-				NsID:           "testcc",
-				NsVersion:      1,
 				ValidationCode: 0,
+				Namespaces:     []types.TxNamespaceRecord{},
 			},
 		},
-		Writes:       []types.WriteRecord{},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
-		Policies:     []types.NamespacePolicyRecord{},
 	}
 
 	processedBlock := &types.ProcessedBlock{
@@ -429,10 +379,7 @@ func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 	ctx := context.Background()
 
 	parsedData := &types.ParsedBlockData{
-		TxNamespaces: []types.TxNamespaceRecord{},
-		Writes:       []types.WriteRecord{},
-		Reads:        []types.ReadRecord{},
-		Endorsements: []types.EndorsementRecord{},
+		Transactions: []types.TxRecord{},
 		Policies:     []types.NamespacePolicyRecord{},
 	}
 

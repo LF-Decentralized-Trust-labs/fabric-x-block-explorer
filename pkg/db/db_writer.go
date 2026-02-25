@@ -44,11 +44,6 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 	if !ok {
 		return errors.New("processed block Data is not *types.ParsedBlockData")
 	}
-	writes := parsedData.Writes
-	reads := parsedData.Reads
-	txNamespaces := parsedData.TxNamespaces
-	endorsements := parsedData.Endorsements
-	policies := parsedData.Policies
 
 	var (
 		tx  pgx.Tx
@@ -83,76 +78,69 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		return err
 	}
 
-	txIDCache := make(map[string]int64)
-	txNsCache := make(map[string]int64)
-
-	for _, txNs := range txNamespaces {
-		txKey := fmt.Sprintf("%d-%d", txNs.BlockNum, txNs.TxNum)
-		if _, found := txIDCache[txKey]; !found {
-			txIDBytes, err := hex.DecodeString(txNs.TxID)
-			if err != nil {
-				return fmt.Errorf("failed to decode tx_id %s: %w", txNs.TxID, err)
-			}
-
-			txID, err := q.InsertTransaction(ctx, dbsqlc.InsertTransactionParams{
-				BlockNum:       int64(txNs.BlockNum),
-				TxNum:          int64(txNs.TxNum),
-				TxID:           txIDBytes,
-				ValidationCode: int64(txNs.ValidationCode),
-			})
-			if err != nil {
-				return err
-			}
-			txIDCache[txKey] = txID
+	for _, txRec := range parsedData.Transactions {
+		txIDBytes, err := hex.DecodeString(txRec.TxID)
+		if err != nil {
+			return fmt.Errorf("failed to decode tx_id %s: %w", txRec.TxID, err)
 		}
-	}
 
-	for _, txNs := range txNamespaces {
-		txKey := fmt.Sprintf("%d-%d", txNs.BlockNum, txNs.TxNum)
-		txID := txIDCache[txKey]
-
-		txNsID, err := q.InsertTxNamespace(ctx, dbsqlc.InsertTxNamespaceParams{
-			TransactionID: txID,
-			NsID:          txNs.NsID,
-			NsVersion:     int64(txNs.NsVersion),
+		txID, err := q.InsertTransaction(ctx, dbsqlc.InsertTransactionParams{
+			BlockNum:       int64(txRec.BlockNum),
+			TxNum:          int64(txRec.TxNum),
+			TxID:           txIDBytes,
+			ValidationCode: int64(txRec.ValidationCode),
 		})
 		if err != nil {
 			return err
 		}
 
-		txNsKey := fmt.Sprintf("%d-%d-%s", txNs.BlockNum, txNs.TxNum, txNs.NsID)
-		txNsCache[txNsKey] = txNsID
-	}
+		for _, ns := range txRec.Namespaces {
+			txNsID, err := q.InsertTxNamespace(ctx, dbsqlc.InsertTxNamespaceParams{
+				TransactionID: txID,
+				NsID:          ns.NsID,
+				NsVersion:     int64(ns.NsVersion),
+			})
+			if err != nil {
+				return err
+			}
 
-	for _, r := range reads {
-		txNsKey := fmt.Sprintf("%d-%d-%s", r.BlockNum, r.TxNum, r.NsID)
-		txNsID := txNsCache[txNsKey]
+			for _, r := range ns.Reads {
+				if err := q.InsertTxRead(ctx, dbsqlc.InsertTxReadParams{
+					TxNamespaceID: txNsID,
+					Key:           []byte(r.Key),
+					Version:       util.PtrToNullableInt64(r.Version),
+					IsReadWrite:   r.IsReadWrite,
+				}); err != nil {
+					return err
+				}
+			}
 
-		if err := q.InsertTxRead(ctx, dbsqlc.InsertTxReadParams{
-			TxNamespaceID: txNsID,
-			Key:           []byte(r.Key),
-			Version:       util.PtrToNullableInt64(r.Version),
-			IsReadWrite:   r.IsReadWrite,
-		}); err != nil {
-			return err
+			for _, e := range ns.Endorsements {
+				if err := q.InsertTxEndorsement(ctx, dbsqlc.InsertTxEndorsementParams{
+					TxNamespaceID: txNsID,
+					Endorsement:   e.Endorsement,
+					MspID:         util.PtrToNullableString(e.MspID),
+					Identity:      e.Identity,
+				}); err != nil {
+					return err
+				}
+			}
+
+			for _, w := range ns.Writes {
+				if err := q.InsertTxWrite(ctx, dbsqlc.InsertTxWriteParams{
+					TxNamespaceID: txNsID,
+					Key:           []byte(w.Key),
+					Value:         w.Value,
+					IsBlindWrite:  w.IsBlindWrite,
+					ReadVersion:   util.PtrToNullableInt64(w.ReadVersion),
+				}); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	for _, e := range endorsements {
-		txNsKey := fmt.Sprintf("%d-%d-%s", e.BlockNum, e.TxNum, e.NsID)
-		txNsID := txNsCache[txNsKey]
-
-		if err := q.InsertTxEndorsement(ctx, dbsqlc.InsertTxEndorsementParams{
-			TxNamespaceID: txNsID,
-			Endorsement:   e.Endorsement,
-			MspID:         util.PtrToNullableString(e.MspID),
-			Identity:      e.Identity,
-		}); err != nil {
-			return err
-		}
-	}
-
-	for _, p := range policies {
+	for _, p := range parsedData.Policies {
 		if len(p.PolicyJSON) == 0 {
 			continue
 		}
@@ -165,26 +153,11 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		}
 	}
 
-	for _, w := range writes {
-		txNsKey := fmt.Sprintf("%d-%d-%s", w.BlockNum, w.TxNum, w.Namespace)
-		txNsID := txNsCache[txNsKey]
-
-		if err := q.InsertTxWrite(ctx, dbsqlc.InsertTxWriteParams{
-			TxNamespaceID: txNsID,
-			Key:           []byte(w.Key),
-			Value:         w.Value,
-			IsBlindWrite:  w.IsBlindWrite,
-			ReadVersion:   util.PtrToNullableInt64(w.ReadVersion),
-		}); err != nil {
-			return err
-		}
-	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	committed = true
 
-	logger.Debugf("db: stored block %d with %d writes, %d reads", pb.BlockInfo.Number, len(writes), len(reads))
+	logger.Debugf("db: stored block %d with %d transactions", pb.BlockInfo.Number, len(parsedData.Transactions))
 	return nil
 }

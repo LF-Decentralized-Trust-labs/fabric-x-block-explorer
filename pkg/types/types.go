@@ -10,6 +10,13 @@ import (
 	"encoding/json"
 )
 
+// ParsedBlockData contains all parsed data from a block, organized by transaction
+type ParsedBlockData struct {
+	Transactions []TxRecord
+	Policies     []NamespacePolicyRecord
+}
+
+// ProcessedBlock wraps parsed block data with metadata for persistence.
 type ProcessedBlock struct {
 	Number    uint64
 	Txns      int
@@ -17,50 +24,49 @@ type ProcessedBlock struct {
 	BlockInfo *BlockInfo
 }
 
-// WriteRecord represents a single write or delete in the world state.
-type WriteRecord struct {
-	Namespace      string
-	Key            string
-	BlockNum       uint64
-	TxNum          uint64
-	Value          []byte
-	TxID           string
-	ValidationCode int32
-	IsBlindWrite   bool
-	ReadVersion    *uint64
-}
-
+// BlockInfo contains block header metadata.
 type BlockInfo struct {
 	Number       uint64
 	PreviousHash []byte
 	DataHash     []byte
 }
 
-// TxNamespaceRecord represents a namespace within a transaction.
-type TxNamespaceRecord struct {
+// TxRecord groups all data for a single transaction within a block.
+type TxRecord struct {
 	BlockNum       uint64
 	TxNum          uint64
 	TxID           string
-	NsID           string
-	NsVersion      uint64
 	ValidationCode int32
+	Namespaces     []TxNamespaceRecord
 }
 
-// ReadRecord represents a single read operation in a transaction.
+// TxNamespaceRecord represents a single (transaction, namespace) pair entry,
+// containing all reads, writes, and endorsements for that namespace.
+type TxNamespaceRecord struct {
+	NsID         string
+	NsVersion    uint64
+	Reads        []ReadRecord
+	Writes       []WriteRecord
+	Endorsements []EndorsementRecord
+}
+
+// ReadRecord represents a single read operation in a transaction namespace.
 type ReadRecord struct {
-	BlockNum    uint64
-	TxNum       uint64
-	NsID        string
 	Key         string
 	Version     *uint64
 	IsReadWrite bool
 }
 
-// EndorsementRecord represents a signature endorsement per namespace.
+// WriteRecord represents a single write or delete in the world state.
+type WriteRecord struct {
+	Key          string
+	Value        []byte
+	IsBlindWrite bool
+	ReadVersion  *uint64
+}
+
+// EndorsementRecord represents a signature endorsement for a namespace.
 type EndorsementRecord struct {
-	BlockNum    uint64
-	TxNum       uint64
-	NsID        string
 	Endorsement []byte
 	MspID       *string
 	Identity    []byte
@@ -71,13 +77,4 @@ type NamespacePolicyRecord struct {
 	Namespace  string
 	Version    uint64
 	PolicyJSON json.RawMessage
-}
-
-// ParsedBlockData contains writes, reads, and namespace records.
-type ParsedBlockData struct {
-	Writes       []WriteRecord
-	Reads        []ReadRecord
-	TxNamespaces []TxNamespaceRecord
-	Endorsements []EndorsementRecord
-	Policies     []NamespacePolicyRecord
 }
