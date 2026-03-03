@@ -41,19 +41,19 @@ type TestContainer struct {
 func PrepareTestEnv(t *testing.T) *TestContainer {
 	t.Helper()
 
-	ctx := context.Background()
-
 	if os.Getenv("DB_DEPLOYMENT") == "local" {
-		return prepareLocalDB(ctx, t)
+		return prepareLocalDB(t)
 	}
 
-	return prepareTestContainer(ctx, t)
+	return prepareTestContainer(t)
 }
 
 // prepareLocalDB connects to local postgres.
-func prepareLocalDB(ctx context.Context, t *testing.T) *TestContainer {
+func prepareLocalDB(t *testing.T) *TestContainer {
 	t.Helper()
 
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
 	dsn := fmt.Sprintf(
 		"postgres://%s:%s@localhost:5432/%s?sslmode=disable",
 		testDBUser,
@@ -67,8 +67,8 @@ func prepareLocalDB(ctx context.Context, t *testing.T) *TestContainer {
 	err = pool.Ping(ctx)
 	require.NoError(t, err, "failed to ping local database")
 
-	// Clean all tables before each test
-	cleanDatabase(ctx, t, pool)
+	// Drop the whole schema for a clean test state.
+	cleanDatabase(t, pool)
 
 	return &TestContainer{
 		Container: nil, // no container when using local
@@ -77,27 +77,23 @@ func prepareLocalDB(ctx context.Context, t *testing.T) *TestContainer {
 	}
 }
 
-// cleanDatabase drops all tables for a clean test state.
-func cleanDatabase(ctx context.Context, t *testing.T, pool *pgxpool.Pool) {
+// cleanDatabase drops and recreates the public schema for a clean test state.
+func cleanDatabase(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 
-	_, err := pool.Exec(ctx, `
-		DROP TABLE IF EXISTS tx_endorsements CASCADE;
-		DROP TABLE IF EXISTS tx_blind_writes CASCADE;
-		DROP TABLE IF EXISTS tx_read_writes CASCADE;
-		DROP TABLE IF EXISTS tx_reads_only CASCADE;
-		DROP TABLE IF EXISTS tx_namespaces CASCADE;
-		DROP TABLE IF EXISTS transactions CASCADE;
-		DROP TABLE IF EXISTS namespace_policies CASCADE;
-		DROP TABLE IF EXISTS blocks CASCADE;
+	_, err := pool.Exec(t.Context(), `
+		DROP SCHEMA public CASCADE;
+		CREATE SCHEMA public;
 	`)
 	require.NoError(t, err, "failed to clean database")
 }
 
 // prepareTestContainer creates a PostgreSQL testcontainer.
-func prepareTestContainer(ctx context.Context, t *testing.T) *TestContainer {
+func prepareTestContainer(t *testing.T) *TestContainer {
 	t.Helper()
 
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
 	postgresContainer, err := postgres.Run(ctx,
 		"postgres:14-alpine",
 		postgres.WithDatabase(testDBName),

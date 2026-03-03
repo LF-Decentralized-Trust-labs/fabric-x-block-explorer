@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package db
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,9 +15,10 @@ import (
 
 // TestDatabaseTestEnv verifies that the test infrastructure works correctly.
 func TestDatabaseTestEnv(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := env.Pool.Ping(ctx)
 	require.NoError(t, err, "database should be reachable")
 
@@ -55,6 +55,7 @@ func TestNewPostgres(t *testing.T) {
 
 // TestDatabaseHelpers verifies helper methods in DatabaseTestEnv.
 func TestDatabaseHelpers(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 
 	blockCount := env.GetBlockCount(t)

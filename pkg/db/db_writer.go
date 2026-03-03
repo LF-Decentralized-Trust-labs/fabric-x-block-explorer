@@ -9,9 +9,8 @@ package db
 import (
 	"context"
 	"encoding/hex"
-	"errors"
-	"fmt"
 
+	"github.com/cockroachdb/errors"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -142,7 +141,7 @@ func buildBatchParams(data *types.ParsedBlockData) (*batchParams, error) {
 func (p *batchParams) appendTx(txRec types.TxRecord) error {
 	txIDBytes, err := hex.DecodeString(txRec.TxID)
 	if err != nil {
-		return fmt.Errorf("failed to decode tx_id %s: %w", txRec.TxID, err)
+		return errors.Wrapf(err, "failed to decode tx_id %s", txRec.TxID)
 	}
 	p.txParams = append(p.txParams, dbsqlc.InsertTransactionParams{
 		BlockNum:       int64(txRec.BlockNum), //nolint:gosec // fits in int64

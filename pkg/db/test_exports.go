@@ -10,6 +10,7 @@ import (
 	"context"
 	_ "embed"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,8 @@ func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 
 	tc := dbtest.PrepareTestEnv(t)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
 	_, err := tc.Pool.Exec(ctx, schemaSQL)
 	require.NoError(t, err, "failed to initialize database schema")
 
@@ -58,7 +60,7 @@ func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 func (env *DatabaseTestEnv) AssertBlockExists(t *testing.T, blockNum int64) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block, err := env.Queries.GetBlock(ctx, blockNum)
 	require.NoError(t, err, "block %d should exist", blockNum)
 	require.Equal(t, blockNum, block.BlockNum)
@@ -68,7 +70,7 @@ func (env *DatabaseTestEnv) AssertBlockExists(t *testing.T, blockNum int64) {
 func (env *DatabaseTestEnv) AssertBlockNotExists(t *testing.T, blockNum int64) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := env.Queries.GetBlock(ctx, blockNum)
 	require.Error(t, err, "block %d should not exist", blockNum)
 }
@@ -77,7 +79,7 @@ func (env *DatabaseTestEnv) AssertBlockNotExists(t *testing.T, blockNum int64) {
 func (env *DatabaseTestEnv) GetBlockCount(t *testing.T) int64 {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	var count int64
 	err := env.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM blocks").Scan(&count)
 	require.NoError(t, err, "failed to count blocks")
@@ -88,7 +90,7 @@ func (env *DatabaseTestEnv) GetBlockCount(t *testing.T) int64 {
 func (env *DatabaseTestEnv) GetTransactionCount(t *testing.T) int64 {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	var count int64
 	err := env.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count)
 	require.NoError(t, err, "failed to count transactions")

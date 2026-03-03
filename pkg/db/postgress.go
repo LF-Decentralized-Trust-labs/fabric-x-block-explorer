@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,12 +42,12 @@ func NewPostgres(cfg Config) (*pgxpool.Pool, error) {
 
 	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pgx pool: %w", err)
+		return nil, errors.Wrap(err, "failed to create pgx pool")
 	}
 
 	if err := pool.Ping(context.Background()); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("failed to connect postgres: %w", err)
+		return nil, errors.Wrap(err, "failed to connect postgres")
 	}
 
 	return pool, nil
