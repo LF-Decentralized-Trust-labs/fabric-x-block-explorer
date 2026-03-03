@@ -7,30 +7,10 @@ package dbsqlc
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getTransactionID = `-- name: GetTransactionID :one
-SELECT id
-FROM transactions
-WHERE block_num = $1 AND tx_num = $2
-`
-
-type GetTransactionIDParams struct {
-	BlockNum int64 `json:"block_num"`
-	TxNum    int64 `json:"tx_num"`
-}
-
-func (q *Queries) GetTransactionID(ctx context.Context, arg GetTransactionIDParams) (int64, error) {
-	row := q.db.QueryRow(ctx, getTransactionID, arg.BlockNum, arg.TxNum)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
 const getValidationCodeByBlock = `-- name: GetValidationCodeByBlock :many
-SELECT id, block_num, tx_num, tx_id, validation_code
+SELECT block_num, tx_num, tx_id, validation_code
 FROM transactions
 WHERE block_num = $1
 ORDER BY tx_num
@@ -53,7 +33,6 @@ func (q *Queries) GetValidationCodeByBlock(ctx context.Context, arg GetValidatio
 	for rows.Next() {
 		var i Transaction
 		if err := rows.Scan(
-			&i.ID,
 			&i.BlockNum,
 			&i.TxNum,
 			&i.TxID,
@@ -70,7 +49,7 @@ func (q *Queries) GetValidationCodeByBlock(ctx context.Context, arg GetValidatio
 }
 
 const getValidationCodeByTxID = `-- name: GetValidationCodeByTxID :one
-SELECT id, block_num, tx_num, tx_id, validation_code
+SELECT block_num, tx_num, tx_id, validation_code
 FROM transactions
 WHERE tx_id = $1
 `
@@ -79,103 +58,10 @@ func (q *Queries) GetValidationCodeByTxID(ctx context.Context, txID []byte) (Tra
 	row := q.db.QueryRow(ctx, getValidationCodeByTxID, txID)
 	var i Transaction
 	err := row.Scan(
-		&i.ID,
 		&i.BlockNum,
 		&i.TxNum,
 		&i.TxID,
 		&i.ValidationCode,
 	)
 	return i, err
-}
-
-const insertTransaction = `-- name: InsertTransaction :one
-INSERT INTO transactions (block_num, tx_num, tx_id, validation_code)
-VALUES ($1, $2, $3, $4)
-ON CONFLICT (block_num, tx_num) DO UPDATE SET tx_id = EXCLUDED.tx_id
-RETURNING id
-`
-
-type InsertTransactionParams struct {
-	BlockNum       int64  `json:"block_num"`
-	TxNum          int64  `json:"tx_num"`
-	TxID           []byte `json:"tx_id"`
-	ValidationCode int64  `json:"validation_code"`
-}
-
-func (q *Queries) InsertTransaction(ctx context.Context, arg InsertTransactionParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertTransaction,
-		arg.BlockNum,
-		arg.TxNum,
-		arg.TxID,
-		arg.ValidationCode,
-	)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const insertTxNamespace = `-- name: InsertTxNamespace :one
-INSERT INTO tx_namespaces (transaction_id, ns_id, ns_version)
-VALUES ($1, $2, $3)
-ON CONFLICT (transaction_id, ns_id) DO UPDATE SET ns_version = EXCLUDED.ns_version
-RETURNING id
-`
-
-type InsertTxNamespaceParams struct {
-	TransactionID int64  `json:"transaction_id"`
-	NsID          string `json:"ns_id"`
-	NsVersion     int64  `json:"ns_version"`
-}
-
-func (q *Queries) InsertTxNamespace(ctx context.Context, arg InsertTxNamespaceParams) (int64, error) {
-	row := q.db.QueryRow(ctx, insertTxNamespace, arg.TransactionID, arg.NsID, arg.NsVersion)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const insertTxRead = `-- name: InsertTxRead :exec
-INSERT INTO tx_reads (tx_namespace_id, key, version, is_read_write)
-VALUES ($1, $2, $3, $4)
-`
-
-type InsertTxReadParams struct {
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Key           []byte      `json:"key"`
-	Version       pgtype.Int8 `json:"version"`
-	IsReadWrite   bool        `json:"is_read_write"`
-}
-
-func (q *Queries) InsertTxRead(ctx context.Context, arg InsertTxReadParams) error {
-	_, err := q.db.Exec(ctx, insertTxRead,
-		arg.TxNamespaceID,
-		arg.Key,
-		arg.Version,
-		arg.IsReadWrite,
-	)
-	return err
-}
-
-const insertTxWrite = `-- name: InsertTxWrite :exec
-INSERT INTO tx_writes (tx_namespace_id, key, value, is_blind_write, read_version)
-VALUES ($1, $2, $3, $4, $5)
-`
-
-type InsertTxWriteParams struct {
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Key           []byte      `json:"key"`
-	Value         []byte      `json:"value"`
-	IsBlindWrite  bool        `json:"is_blind_write"`
-	ReadVersion   pgtype.Int8 `json:"read_version"`
-}
-
-func (q *Queries) InsertTxWrite(ctx context.Context, arg InsertTxWriteParams) error {
-	_, err := q.db.Exec(ctx, insertTxWrite,
-		arg.TxNamespaceID,
-		arg.Key,
-		arg.Value,
-		arg.IsBlindWrite,
-		arg.ReadVersion,
-	)
-	return err
 }

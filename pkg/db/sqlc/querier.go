@@ -9,22 +9,23 @@ import (
 )
 
 type Querier interface {
+	GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTxParams) ([]GetBlindWritesByTxRow, error)
 	GetBlock(ctx context.Context, blockNum int64) (Block, error)
 	GetBlockHeight(ctx context.Context) (interface{}, error)
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
-	GetReadsByTx(ctx context.Context, arg GetReadsByTxParams) ([]GetReadsByTxRow, error)
-	GetTransactionID(ctx context.Context, arg GetTransactionIDParams) (int64, error)
+	GetReadWritesByTx(ctx context.Context, arg GetReadWritesByTxParams) ([]GetReadWritesByTxRow, error)
+	GetReadsOnlyByTx(ctx context.Context, arg GetReadsOnlyByTxParams) ([]GetReadsOnlyByTxRow, error)
 	GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error)
 	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)
-	GetWritesByTx(ctx context.Context, arg GetWritesByTxParams) ([]GetWritesByTxRow, error)
+	InsertBlindWrite(ctx context.Context, arg []InsertBlindWriteParams) *InsertBlindWriteBatchResults
 	InsertBlock(ctx context.Context, arg InsertBlockParams) error
-	InsertTransaction(ctx context.Context, arg InsertTransactionParams) (int64, error)
-	InsertTxEndorsement(ctx context.Context, arg InsertTxEndorsementParams) error
-	InsertTxNamespace(ctx context.Context, arg InsertTxNamespaceParams) (int64, error)
-	InsertTxRead(ctx context.Context, arg InsertTxReadParams) error
-	InsertTxWrite(ctx context.Context, arg InsertTxWriteParams) error
-	UpsertNamespacePolicy(ctx context.Context, arg UpsertNamespacePolicyParams) error
+	InsertReadOnly(ctx context.Context, arg []InsertReadOnlyParams) *InsertReadOnlyBatchResults
+	InsertReadWrite(ctx context.Context, arg []InsertReadWriteParams) *InsertReadWriteBatchResults
+	InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults
+	InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorsementParams) *InsertTxEndorsementBatchResults
+	InsertTxNamespace(ctx context.Context, arg []InsertTxNamespaceParams) *InsertTxNamespaceBatchResults
+	UpsertNamespacePolicy(ctx context.Context, arg []UpsertNamespacePolicyParams) *UpsertNamespacePolicyBatchResults
 }
 
 var _ Querier = (*Queries)(nil)

@@ -16,48 +16,55 @@ type Block struct {
 }
 
 type NamespacePolicy struct {
-	ID        int64  `json:"id"`
 	Namespace string `json:"namespace"`
 	Version   int64  `json:"version"`
 	Policy    []byte `json:"policy"`
 }
 
 type Transaction struct {
-	ID             int64  `json:"id"`
 	BlockNum       int64  `json:"block_num"`
 	TxNum          int64  `json:"tx_num"`
 	TxID           []byte `json:"tx_id"`
 	ValidationCode int64  `json:"validation_code"`
 }
 
+type TxBlindWrite struct {
+	BlockNum int64  `json:"block_num"`
+	TxNum    int64  `json:"tx_num"`
+	NsID     string `json:"ns_id"`
+	Key      []byte `json:"key"`
+	Value    []byte `json:"value"`
+}
+
 type TxEndorsement struct {
-	ID            int64       `json:"id"`
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Endorsement   []byte      `json:"endorsement"`
-	MspID         pgtype.Text `json:"msp_id"`
-	Identity      []byte      `json:"identity"`
+	BlockNum    int64       `json:"block_num"`
+	TxNum       int64       `json:"tx_num"`
+	NsID        string      `json:"ns_id"`
+	Endorsement []byte      `json:"endorsement"`
+	MspID       pgtype.Text `json:"msp_id"`
+	Identity    []byte      `json:"identity"`
 }
 
 type TxNamespace struct {
-	ID            int64  `json:"id"`
-	TransactionID int64  `json:"transaction_id"`
-	NsID          string `json:"ns_id"`
-	NsVersion     int64  `json:"ns_version"`
+	BlockNum  int64  `json:"block_num"`
+	TxNum     int64  `json:"tx_num"`
+	NsID      string `json:"ns_id"`
+	NsVersion int64  `json:"ns_version"`
 }
 
-type TxRead struct {
-	ID            int64       `json:"id"`
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Key           []byte      `json:"key"`
-	Version       pgtype.Int8 `json:"version"`
-	IsReadWrite   bool        `json:"is_read_write"`
+type TxReadWrite struct {
+	BlockNum    int64       `json:"block_num"`
+	TxNum       int64       `json:"tx_num"`
+	NsID        string      `json:"ns_id"`
+	Key         []byte      `json:"key"`
+	ReadVersion pgtype.Int8 `json:"read_version"`
+	Value       []byte      `json:"value"`
 }
 
-type TxWrite struct {
-	ID            int64       `json:"id"`
-	TxNamespaceID int64       `json:"tx_namespace_id"`
-	Key           []byte      `json:"key"`
-	Value         []byte      `json:"value"`
-	IsBlindWrite  bool        `json:"is_blind_write"`
-	ReadVersion   pgtype.Int8 `json:"read_version"`
+type TxReadsOnly struct {
+	BlockNum int64       `json:"block_num"`
+	TxNum    int64       `json:"tx_num"`
+	NsID     string      `json:"ns_id"`
+	Key      []byte      `json:"key"`
+	Version  pgtype.Int8 `json:"version"`
 }
