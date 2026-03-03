@@ -87,7 +87,7 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 	}
 	committed = true
 
-	logger.Debugf("db: stored block %d with %d transactions", pb.BlockInfo.Number, len(parsedData.Transactions))
+	logger.Debugf("stored block %d with %d transactions", pb.BlockInfo.Number, len(parsedData.Transactions))
 	return nil
 }
 

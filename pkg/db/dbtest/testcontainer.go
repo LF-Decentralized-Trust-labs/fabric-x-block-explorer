@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -21,10 +22,22 @@ import (
 )
 
 const (
-	// PostgreSQL configuration.
-	testDBName     = "explorer_test"
-	testDBUser     = "postgres"
-	testDBPassword = "postgres"
+	// TestDBName is the test database name.
+	TestDBName = "explorer_test"
+	// TestDBUser is the test database user.
+	TestDBUser = "postgres"
+	// TestDBPassword is the test database password.
+	TestDBPassword = "postgres"
+	// TestDBHost is the test database host.
+	TestDBHost = "localhost"
+	// TestDBPort is the default PostgreSQL port used in tests.
+	TestDBPort = 5432
+
+	testDBImage = "postgres:14-alpine"
+
+	// TestSetupTimeout is the maximum time allowed for test database setup.
+	TestSetupTimeout            = 2 * time.Minute
+	testContainerStartupTimeout = 60 * time.Second
 )
 
 // TestContainer holds the PostgreSQL testcontainer instance.
@@ -48,17 +61,27 @@ func PrepareTestEnv(t *testing.T) *TestContainer {
 	return prepareTestContainer(t)
 }
 
-// prepareLocalDB connects to local postgres.
+// prepareLocalDB connects to a local postgres instance.
+// Connection parameters can be overridden via standard PostgreSQL environment
+// variables: PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE.
 func prepareLocalDB(t *testing.T) *TestContainer {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	host := envOrDefault("PGHOST", TestDBHost)
+	port := envOrDefaultInt("PGPORT", TestDBPort)
+	user := envOrDefault("PGUSER", TestDBUser)
+	password := envOrDefault("PGPASSWORD", TestDBPassword)
+	dbname := envOrDefault("PGDATABASE", TestDBName)
+
+	ctx, cancel := context.WithTimeout(t.Context(), TestSetupTimeout)
 	t.Cleanup(cancel)
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@localhost:5432/%s?sslmode=disable",
-		testDBUser,
-		testDBPassword,
-		testDBName,
+		"postgres://%s:%s@%s:%d/%s?sslmode=disable",
+		user,
+		password,
+		host,
+		port,
+		dbname,
 	)
 
 	pool, err := pgxpool.New(ctx, dsn)
@@ -71,7 +94,7 @@ func prepareLocalDB(t *testing.T) *TestContainer {
 	cleanDatabase(t, pool)
 
 	return &TestContainer{
-		Container: nil, // no container when using local
+		Container: nil,
 		Pool:      pool,
 		DSN:       dsn,
 	}
@@ -92,17 +115,17 @@ func cleanDatabase(t *testing.T, pool *pgxpool.Pool) {
 func prepareTestContainer(t *testing.T) *TestContainer {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), TestSetupTimeout)
 	t.Cleanup(cancel)
 	postgresContainer, err := postgres.Run(ctx,
-		"postgres:14-alpine",
-		postgres.WithDatabase(testDBName),
-		postgres.WithUsername(testDBUser),
-		postgres.WithPassword(testDBPassword),
+		testDBImage,
+		postgres.WithDatabase(TestDBName),
+		postgres.WithUsername(TestDBUser),
+		postgres.WithPassword(TestDBPassword),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second),
+				WithStartupTimeout(testContainerStartupTimeout),
 		),
 	)
 	require.NoError(t, err, "failed to start postgres container")
@@ -136,4 +159,24 @@ func (tc *TestContainer) Close(t *testing.T) {
 		err := tc.Container.Terminate(ctx)
 		require.NoError(t, err, "failed to terminate container")
 	}
+}
+
+// envOrDefault returns the value of the environment variable key,
+// or fallback if the variable is unset or empty.
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// envOrDefaultInt returns the integer value of the environment variable key,
+// or fallback if the variable is unset, empty, or not a valid integer.
+func envOrDefaultInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return fallback
 }

@@ -33,7 +33,6 @@ type nsData struct {
 }
 
 // Parser parses a raw Fabric block into structured data.
-// Implement this interface to substitute a custom parser in the pipeline.
 type Parser interface {
 	Parse(*common.Block) (*types.ParsedBlockData, *types.BlockInfo, error)
 }
@@ -316,13 +315,16 @@ func extractConfigTxPolicy(data []byte) ([]types.NamespacePolicyRecord, bool) {
 }
 
 // rwSets extracts namespace data and txID from an envelope.
-// Returns the proto TxNamespace data directly without intermediate conversion.
 func rwSets(env *common.Envelope) ([]nsData, error) {
 	out := []nsData{}
 
 	pl := &common.Payload{}
 	if err := proto.Unmarshal(env.Payload, pl); err != nil {
 		return out, errors.Wrap(err, "payload")
+	}
+
+	if pl.Header == nil || pl.Header.ChannelHeader == nil {
+		return out, errors.New("missing header in payload")
 	}
 
 	chdr := &common.ChannelHeader{}

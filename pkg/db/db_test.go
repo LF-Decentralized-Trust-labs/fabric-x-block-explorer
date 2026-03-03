@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/dbtest"
 )
 
 // TestDatabaseTestEnv verifies that the test infrastructure works correctly.
@@ -39,15 +41,15 @@ func TestNewPostgres(t *testing.T) {
 	t.Parallel()
 
 	cfg := Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "explorer_test",
+		Host:     dbtest.TestDBHost,
+		Port:     dbtest.TestDBPort,
+		User:     dbtest.TestDBUser,
+		Password: dbtest.TestDBPassword,
+		DBName:   dbtest.TestDBName,
 		SSLMode:  "",
 	}
 
-	_, err := NewPostgres(cfg)
+	_, err := NewPostgres(t.Context(), cfg)
 	if err != nil {
 		require.Contains(t, err.Error(), "failed to", "error should be connection-related")
 	}

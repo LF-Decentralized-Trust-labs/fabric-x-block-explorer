@@ -10,7 +10,6 @@ import (
 	"context"
 	_ "embed"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -36,7 +35,7 @@ func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 
 	tc := dbtest.PrepareTestEnv(t)
 
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), dbtest.TestSetupTimeout)
 	t.Cleanup(cancel)
 	_, err := tc.Pool.Exec(ctx, schemaSQL)
 	require.NoError(t, err, "failed to initialize database schema")
