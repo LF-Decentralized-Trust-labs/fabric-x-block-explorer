@@ -11,8 +11,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/dbtest"
 )
 
 // TestDatabaseTestEnv verifies that the test infrastructure works correctly.
@@ -40,19 +38,20 @@ func TestDatabaseTestEnv(t *testing.T) {
 func TestNewPostgres(t *testing.T) {
 	t.Parallel()
 
+	env := NewDatabaseTestEnv(t)
+	c := env.Pool.Config().ConnConfig
+
 	cfg := Config{
-		Host:     dbtest.TestDBHost,
-		Port:     dbtest.TestDBPort,
-		User:     dbtest.TestDBUser,
-		Password: dbtest.TestDBPassword,
-		DBName:   dbtest.TestDBName,
-		SSLMode:  "",
+		Host:     c.Host,
+		Port:     int(c.Port),
+		User:     c.User,
+		Password: c.Password,
+		DBName:   c.Database,
 	}
 
-	_, err := NewPostgres(t.Context(), cfg)
-	if err != nil {
-		require.Contains(t, err.Error(), "failed to", "error should be connection-related")
-	}
+	pool, err := NewPostgres(t.Context(), cfg)
+	require.NoError(t, err)
+	defer pool.Close()
 }
 
 // TestDatabaseHelpers verifies helper methods in DatabaseTestEnv.

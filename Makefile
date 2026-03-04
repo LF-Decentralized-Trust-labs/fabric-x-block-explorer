@@ -20,15 +20,9 @@ test-no-db: ## Run tests that do not require a database (parser, types, util)
 		./pkg/types/... \
 		./pkg/util/...
 
-test-requires-db: ## Run DB tests using Docker testcontainer (requires Docker)
-	@echo "Running tests with Docker testcontainer..."
-	go test -v -count=1 ./pkg/db/...
-
-test-local-db: ## Run DB tests against a local PostgreSQL instance (no Docker)
-	@echo "Running tests against local PostgreSQL..."
-	@echo "  Override defaults with: PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE"
-	@echo "  Defaults: localhost:5432 user=postgres db=explorer_test"
-	DB_DEPLOYMENT=local go test -v -count=1 ./pkg/db/...
+test-requires-db: ## Run DB tests using Docker (requires Docker)
+	@echo "Running tests with Docker..."
+	DB_TYPE=postgres go test -v -count=1 ./pkg/db/...
 
 test-all: ## Run all tests
 	@echo "Running all tests..."

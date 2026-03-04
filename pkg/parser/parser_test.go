@@ -19,7 +19,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// TestParse tests the main Parse function with various block scenarios.
 func TestParse(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -85,9 +84,7 @@ func TestParse(t *testing.T) {
 	}
 }
 
-// TestParseBlockWithTransaction tests parsing a block with a valid transaction.
 func TestParseBlockWithTransaction(t *testing.T) {
-	// Create a simple transaction with one namespace
 	ns := &protoblocktx.TxNamespace{
 		NsId:      "mycc",
 		NsVersion: 1,
@@ -112,7 +109,6 @@ func TestParseBlockWithTransaction(t *testing.T) {
 	txBytes, err := proto.Marshal(protoTx)
 	require.NoError(t, err)
 
-	// Create channel header
 	chdr := &common.ChannelHeader{
 		Type:  int32(common.HeaderType_ENDORSER_TRANSACTION),
 		TxId:  "tx123",
@@ -121,7 +117,6 @@ func TestParseBlockWithTransaction(t *testing.T) {
 	chdrBytes, err := proto.Marshal(chdr)
 	require.NoError(t, err)
 
-	// Create payload
 	payload := &common.Payload{
 		Header: &common.Header{
 			ChannelHeader: chdrBytes,
@@ -131,14 +126,12 @@ func TestParseBlockWithTransaction(t *testing.T) {
 	payloadBytes, err := proto.Marshal(payload)
 	require.NoError(t, err)
 
-	// Create envelope
 	env := &common.Envelope{
 		Payload: payloadBytes,
 	}
 	envBytes, err := proto.Marshal(env)
 	require.NoError(t, err)
 
-	// Create block with the transaction
 	block := &common.Block{
 		Header: &common.BlockHeader{
 			Number:       10,
@@ -162,28 +155,23 @@ func TestParseBlockWithTransaction(t *testing.T) {
 	assert.NotNil(t, blockInfo)
 	assert.Equal(t, uint64(10), blockInfo.Number)
 
-	// Verify transaction record
 	require.Len(t, parsedData.Transactions, 1)
 	tx := parsedData.Transactions[0]
 	assert.Equal(t, "tx123", tx.TxID)
 	assert.Equal(t, uint64(10), tx.BlockNum)
 
-	// Verify namespace record
 	require.Len(t, tx.Namespaces, 1)
 	nsRec := tx.Namespaces[0]
 	assert.Equal(t, "mycc", nsRec.NsID)
 
-	// Verify reads-only: 1 entry
 	assert.Len(t, nsRec.ReadsOnly, 1)
 	assert.Equal(t, "key2", nsRec.ReadsOnly[0].Key)
 
-	// Verify read-writes: 1 entry
 	assert.Len(t, nsRec.ReadWrites, 1)
 	assert.Equal(t, "key1", nsRec.ReadWrites[0].Key)
 	assert.Equal(t, []byte("value1"), nsRec.ReadWrites[0].Value)
 }
 
-// TestExtractPolicies tests policy extraction from config transactions.
 func TestExtractPolicies(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -231,7 +219,6 @@ func TestExtractPolicies(t *testing.T) {
 	}
 }
 
-// TestPolicyToJSON tests policy conversion to JSON format.
 func TestPolicyToJSON(t *testing.T) {
 	policyBytes := []byte("test_policy_data")
 	jsonData, err := policyToJSON(policyBytes)
@@ -241,7 +228,6 @@ func TestPolicyToJSON(t *testing.T) {
 	assert.Contains(t, string(jsonData), "policy_bytes")
 }
 
-// TestEndorsementToIdentityJSON tests extraction of identity from endorsement.
 func TestEndorsementToIdentityJSON(t *testing.T) {
 	// Create a valid SerializedIdentity
 	serializedID := &msp.SerializedIdentity{
@@ -270,16 +256,13 @@ func TestEndorsementToIdentityJSON(t *testing.T) {
 	assert.Contains(t, string(identityJSON), "id_bytes")
 }
 
-// TestEndorsementToIdentityJSONInvalidData tests error handling.
 func TestEndorsementToIdentityJSONInvalidData(t *testing.T) {
 	invalidBytes := []byte("invalid_protobuf")
 	_, _, err := endorsementToIdentityJSON(invalidBytes)
 	assert.Error(t, err)
 }
 
-// TestRWSets tests extraction of read-write sets from envelope.
 func TestRWSets(t *testing.T) {
-	// Create namespace with read-write data
 	ns := &protoblocktx.TxNamespace{
 		NsId:      "chaincode1",
 		NsVersion: 2,
@@ -314,7 +297,6 @@ func TestRWSets(t *testing.T) {
 		Payload: payloadBytes,
 	}
 
-	// Test rwSets extraction
 	nsDataList, err := rwSets(env)
 	require.NoError(t, err)
 	assert.Len(t, nsDataList, 1)
@@ -323,7 +305,6 @@ func TestRWSets(t *testing.T) {
 	assert.NotNil(t, nsDataList[0].Endorsement)
 }
 
-// TestParseWithBlindWrites tests parsing blocks with blind writes.
 func TestParseWithBlindWrites(t *testing.T) {
 	ns := &protoblocktx.TxNamespace{
 		NsId:      "mycc",
@@ -386,7 +367,6 @@ func TestParseWithBlindWrites(t *testing.T) {
 	assert.Equal(t, []byte("blind_value"), nsRec.BlindWrites[0].Value)
 }
 
-// TestParseSkipsInvalidTransactions tests that invalid transactions are skipped.
 func TestParseSkipsInvalidTransactions(t *testing.T) {
 	block := &common.Block{
 		Header: &common.BlockHeader{
@@ -409,11 +389,10 @@ func TestParseSkipsInvalidTransactions(t *testing.T) {
 	parsedData, blockInfo, err := Parse(block)
 	require.NoError(t, err)
 	assert.NotNil(t, blockInfo)
-	// Invalid envelope should be skipped, resulting in no transactions
+
 	assert.Empty(t, parsedData.Transactions)
 }
 
-// TestParseConfigTransaction tests parsing of config transactions.
 func TestParseConfigTransaction(t *testing.T) {
 	configTx := &protoblocktx.ConfigTransaction{
 		Version:  1,

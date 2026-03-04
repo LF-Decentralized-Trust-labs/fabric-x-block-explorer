@@ -32,24 +32,6 @@ type nsData struct {
 	Endorsement []byte
 }
 
-// Parser parses a raw Fabric block into structured data.
-type Parser interface {
-	Parse(*common.Block) (*types.ParsedBlockData, *types.BlockInfo, error)
-}
-
-// BlockParser is the default Parser implementation.
-type BlockParser struct{}
-
-// New returns a new BlockParser.
-func New() *BlockParser {
-	return &BlockParser{}
-}
-
-// Parse implements the Parser interface.
-func (*BlockParser) Parse(b *common.Block) (*types.ParsedBlockData, *types.BlockInfo, error) {
-	return Parse(b)
-}
-
 // Parse extracts transactions and write-sets from a Fabric block and returns
 // the data organised in the hierarchical ParsedBlockData structure alongside
 // a BlockInfo containing the block header metadata.
@@ -84,8 +66,8 @@ func parseTxData(
 	data [][]byte,
 	txFilter []byte,
 ) ([]types.TxRecord, []types.NamespacePolicyRecord) {
-	transactions := []types.TxRecord{}
-	policies := []types.NamespacePolicyRecord{}
+	transactions := make([]types.TxRecord, 0, len(data))
+	policies := make([]types.NamespacePolicyRecord, 0, len(data))
 
 	for txNum, envBytes := range data {
 		if txNum >= len(txFilter) {
@@ -150,8 +132,11 @@ func buildTxRecord(
 func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 	ns := nd.Namespace
 	nsRecord := types.TxNamespaceRecord{
-		NsID:      ns.NsId,
-		NsVersion: ns.NsVersion,
+		NsID:        ns.NsId,
+		NsVersion:   ns.NsVersion,
+		ReadsOnly:   make([]types.ReadOnlyRecord, 0, len(ns.ReadsOnly)),
+		ReadWrites:  make([]types.ReadWriteRecord, 0, len(ns.ReadWrites)),
+		BlindWrites: make([]types.BlindWriteRecord, 0, len(ns.BlindWrites)),
 	}
 
 	if len(nd.Endorsement) > 0 {
@@ -200,8 +185,6 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 
 // policyToJSON converts protobuf policy bytes to a JSON object with base64-encoded policy.
 func policyToJSON(policyBytes []byte) (json.RawMessage, error) {
-	// Store as base64-encoded bytes in a simple JSON structure.
-	// This allows storing in JSONB while preserving exact binary data.
 	return json.Marshal(map[string]string{
 		"policy_bytes": base64.StdEncoding.EncodeToString(policyBytes),
 	})
