@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package db
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,9 +15,10 @@ import (
 
 // TestDatabaseTestEnv verifies that the test infrastructure works correctly.
 func TestDatabaseTestEnv(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	err := env.Pool.Ping(ctx)
 	require.NoError(t, err, "database should be reachable")
 
@@ -38,23 +38,25 @@ func TestDatabaseTestEnv(t *testing.T) {
 func TestNewPostgres(t *testing.T) {
 	t.Parallel()
 
+	env := NewDatabaseTestEnv(t)
+	c := env.Pool.Config().ConnConfig
+
 	cfg := Config{
-		Host:     "localhost",
-		Port:     5432,
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "explorer_test",
-		SSLMode:  "",
+		Host:     c.Host,
+		Port:     int(c.Port),
+		User:     c.User,
+		Password: c.Password,
+		DBName:   c.Database,
 	}
 
-	_, err := NewPostgres(cfg)
-	if err != nil {
-		require.Contains(t, err.Error(), "failed to", "error should be connection-related")
-	}
+	pool, err := NewPostgres(t.Context(), cfg)
+	require.NoError(t, err)
+	defer pool.Close()
 }
 
 // TestDatabaseHelpers verifies helper methods in DatabaseTestEnv.
 func TestDatabaseHelpers(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 
 	blockCount := env.GetBlockCount(t)

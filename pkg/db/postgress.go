@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,32 +22,37 @@ type Config struct {
 	Password string //nolint:gosec // intentional: field holds a connection credential
 	DBName   string
 	SSLMode  string
+	MaxConns int
 }
 
 // NewPostgres creates a new pgx connection pool using the given config.
-func NewPostgres(cfg Config) (*pgxpool.Pool, error) {
+func NewPostgres(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	if cfg.SSLMode == "" {
 		cfg.SSLMode = "disable"
 	}
+	if cfg.MaxConns <= 0 {
+		cfg.MaxConns = 20
+	}
 
 	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_max_conns=20",
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_max_conns=%d",
 		cfg.User,
 		cfg.Password,
 		cfg.Host,
 		cfg.Port,
 		cfg.DBName,
 		cfg.SSLMode,
+		cfg.MaxConns,
 	)
 
-	pool, err := pgxpool.New(context.Background(), dsn)
+	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pgx pool: %w", err)
+		return nil, errors.Wrap(err, "failed to create pgx pool")
 	}
 
-	if err := pool.Ping(context.Background()); err != nil {
+	if err := pool.Ping(ctx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("failed to connect postgres: %w", err)
+		return nil, errors.Wrap(err, "failed to connect postgres")
 	}
 
 	return pool, nil

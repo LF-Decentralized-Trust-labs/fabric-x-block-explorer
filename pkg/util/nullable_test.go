@@ -14,6 +14,7 @@ import (
 )
 
 func TestNullableInt64ToPtr(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input pgtype.Int8
@@ -43,6 +44,7 @@ func TestNullableInt64ToPtr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := NullableInt64ToPtr(tt.input)
 			if tt.want == nil {
 				assert.Nil(t, result)
@@ -55,6 +57,7 @@ func TestNullableInt64ToPtr(t *testing.T) {
 }
 
 func TestNullableStringToPtr(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input pgtype.Text
@@ -84,6 +87,7 @@ func TestNullableStringToPtr(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := NullableStringToPtr(tt.input)
 			if tt.want == nil {
 				assert.Nil(t, result)
@@ -96,6 +100,7 @@ func TestNullableStringToPtr(t *testing.T) {
 }
 
 func TestPtrToNullableInt64(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input *uint64
@@ -125,6 +130,7 @@ func TestPtrToNullableInt64(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := PtrToNullableInt64(tt.input)
 			assert.Equal(t, tt.want.Valid, result.Valid)
 			if tt.want.Valid {
@@ -135,6 +141,7 @@ func TestPtrToNullableInt64(t *testing.T) {
 }
 
 func TestPtrToNullableString(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		input *string
@@ -164,6 +171,7 @@ func TestPtrToNullableString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			result := PtrToNullableString(tt.input)
 			assert.Equal(t, tt.want.Valid, result.Valid)
 			if tt.want.Valid {

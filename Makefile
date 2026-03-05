@@ -13,15 +13,16 @@ lint: ## Run golangci-lint
 	golangci-lint run ./...
 	@echo "✅ Lint passed"
 
-test-no-db: ## Run tests that don't require database
+test-no-db: ## Run tests that do not require a database (parser, types, util)
 	@echo "Running tests without database requirement..."
 	go test -v -count=1 \
+		./pkg/parser/... \
 		./pkg/types/... \
 		./pkg/util/...
 
-test-requires-db: ## Run tests that require database (uses testcontainers by default)
-	@echo "Running tests that require database..."
-	go test -v -count=1 ./pkg/db/...
+test-requires-db: ## Run DB tests using Docker (requires Docker)
+	@echo "Running tests with Docker..."
+	DB_TYPE=postgres go test -v -count=1 ./pkg/db/...
 
 test-all: ## Run all tests
 	@echo "Running all tests..."

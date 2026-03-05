@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package db
 
 import (
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"testing"
@@ -18,10 +17,10 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-// TestWriteProcessedBlock tests writing a complete block with all components.
 func TestWriteProcessedBlock(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	txID := "abc123def456"
 	txIDBytes, err := hex.DecodeString(txID)
@@ -91,10 +90,10 @@ func TestWriteProcessedBlock(t *testing.T) {
 	assert.Equal(t, int64(1), env.GetTransactionCount(t))
 }
 
-// TestWriteProcessedBlockWithBlindWrites tests writing blind writes.
 func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	txID := "deadbeef"
 	parsedData := &types.ParsedBlockData{
@@ -109,7 +108,6 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 						NsID:      "testcc",
 						NsVersion: 1,
 						BlindWrites: []types.BlindWriteRecord{
-							// Blind writes have no read version
 							{Key: "blindkey", Value: []byte("blindvalue")},
 						},
 					},
@@ -144,10 +142,10 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	assert.Equal(t, []byte("blindkey"), key)
 }
 
-// TestWriteProcessedBlockMultipleTransactions tests multiple transactions in one block.
 func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
@@ -206,10 +204,10 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 	assert.Equal(t, int64(2), count)
 }
 
-// TestWriteProcessedBlockNilBlock tests error handling for nil block.
 func TestWriteProcessedBlockNilBlock(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	writer := NewBlockWriter(env.Pool)
 	err := writer.WriteProcessedBlock(ctx, nil)
@@ -217,16 +215,16 @@ func TestWriteProcessedBlockNilBlock(t *testing.T) {
 	assert.Contains(t, err.Error(), "nil")
 }
 
-// TestWriteProcessedBlockInvalidData tests error handling for invalid data type.
 func TestWriteProcessedBlockInvalidData(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	processedBlock := &types.ProcessedBlock{
 		BlockInfo: &types.BlockInfo{
 			Number: 1,
 		},
-		Data: "invalid_data_type", // Wrong type
+		Data: "invalid_data_type",
 		Txns: 0,
 	}
 
@@ -236,10 +234,10 @@ func TestWriteProcessedBlockInvalidData(t *testing.T) {
 	assert.Contains(t, err.Error(), "not *types.ParsedBlockData")
 }
 
-// TestWriteProcessedBlockWithPolicies tests policy upsert functionality.
 func TestWriteProcessedBlockWithPolicies(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	policyJSON := json.RawMessage(`{"policy_bytes":"base64encodedpolicy"}`)
 
@@ -303,17 +301,17 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 	assert.Len(t, policies, 2)
 }
 
-// TestWriteProcessedBlockRollbackOnError tests transaction rollback on error.
 func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
 				BlockNum:       6,
 				TxNum:          0,
-				TxID:           "invalid_hex_ZZZ", // Invalid hex string
+				TxID:           "invalid_hex_ZZZ",
 				ValidationCode: 0,
 				Namespaces:     []types.TxNamespaceRecord{},
 			},
@@ -338,8 +336,8 @@ func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 	env.AssertBlockNotExists(t, 6)
 }
 
-// TestNewBlockWriter tests BlockWriter constructors.
 func TestNewBlockWriter(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 
 	writer1 := NewBlockWriter(env.Pool)
@@ -347,7 +345,7 @@ func TestNewBlockWriter(t *testing.T) {
 	assert.NotNil(t, writer1.pool)
 	assert.Nil(t, writer1.conn)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	conn, err := env.Pool.Acquire(ctx)
 	require.NoError(t, err)
 	defer conn.Release()
@@ -358,10 +356,10 @@ func TestNewBlockWriter(t *testing.T) {
 	assert.Nil(t, writer2.pool)
 }
 
-// TestWriteProcessedBlockEmptyComponents tests writing block with empty slices.
 func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
+	t.Parallel()
 	env := NewDatabaseTestEnv(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{},

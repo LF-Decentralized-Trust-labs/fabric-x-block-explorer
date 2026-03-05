@@ -9,12 +9,16 @@ package db
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/dbtest"
+	committerdbtest "github.com/hyperledger/fabric-x-committer/service/vc/dbtest"
+	"github.com/hyperledger/fabric-x-committer/utils/connection"
+
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
 
@@ -25,40 +29,50 @@ var schemaSQL string
 type DatabaseTestEnv struct {
 	Pool    *pgxpool.Pool
 	Queries *dbsqlc.Queries
-	tc      *dbtest.TestContainer
 }
 
-// NewDatabaseTestEnv creates a new test environment with a PostgreSQL testcontainer.
-// The schema is automatically initialized, and cleanup is registered with t.Cleanup().
+// NewDatabaseTestEnv creates a new test environment backed by a fresh isolated
+// PostgreSQL database. It uses the fabric-x-committer test infrastructure to
+// spin up a container (or connect to a local instance via DB_DEPLOYMENT=local)
+// and creates a uniquely-named database per test so tests can run in parallel.
+// The database is dropped and resources are released via t.Cleanup.
 func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 	t.Helper()
 
-	tc := dbtest.PrepareTestEnv(t)
+	// The committer dbtest defaults to YugabyteDB; select PostgreSQL instead.
+	t.Setenv("DB_TYPE", committerdbtest.PostgresDBType)
 
-	ctx := context.Background()
-	_, err := tc.Pool.Exec(ctx, schemaSQL)
+	conn := committerdbtest.PrepareTestEnv(t)
+
+	hostsStr := connection.AddressString(conn.Endpoints...)
+	dsn := fmt.Sprintf(
+		"postgres://%s:%s@%s/%s?sslmode=disable",
+		conn.User, conn.Password, hostsStr, conn.Database,
+	)
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
+	t.Cleanup(cancel)
+
+	pool, err := pgxpool.New(ctx, dsn)
+	require.NoError(t, err, "failed to create connection pool")
+	require.NoError(t, pool.Ping(ctx), "failed to ping database")
+
+	t.Cleanup(pool.Close)
+
+	_, err = pool.Exec(ctx, schemaSQL)
 	require.NoError(t, err, "failed to initialize database schema")
 
-	queries := dbsqlc.New(tc.Pool)
-
-	env := &DatabaseTestEnv{
-		Pool:    tc.Pool,
-		Queries: queries,
-		tc:      tc,
+	return &DatabaseTestEnv{
+		Pool:    pool,
+		Queries: dbsqlc.New(pool),
 	}
-
-	t.Cleanup(func() {
-		tc.Close(t)
-	})
-
-	return env
 }
 
 // AssertBlockExists checks that a block exists.
 func (env *DatabaseTestEnv) AssertBlockExists(t *testing.T, blockNum int64) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	block, err := env.Queries.GetBlock(ctx, blockNum)
 	require.NoError(t, err, "block %d should exist", blockNum)
 	require.Equal(t, blockNum, block.BlockNum)
@@ -68,7 +82,7 @@ func (env *DatabaseTestEnv) AssertBlockExists(t *testing.T, blockNum int64) {
 func (env *DatabaseTestEnv) AssertBlockNotExists(t *testing.T, blockNum int64) {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err := env.Queries.GetBlock(ctx, blockNum)
 	require.Error(t, err, "block %d should not exist", blockNum)
 }
@@ -77,7 +91,7 @@ func (env *DatabaseTestEnv) AssertBlockNotExists(t *testing.T, blockNum int64) {
 func (env *DatabaseTestEnv) GetBlockCount(t *testing.T) int64 {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	var count int64
 	err := env.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM blocks").Scan(&count)
 	require.NoError(t, err, "failed to count blocks")
@@ -88,7 +102,7 @@ func (env *DatabaseTestEnv) GetBlockCount(t *testing.T) int64 {
 func (env *DatabaseTestEnv) GetTransactionCount(t *testing.T) int64 {
 	t.Helper()
 
-	ctx := context.Background()
+	ctx := t.Context()
 	var count int64
 	err := env.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM transactions").Scan(&count)
 	require.NoError(t, err, "failed to count transactions")
