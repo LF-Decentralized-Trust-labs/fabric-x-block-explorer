@@ -16,8 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	committerdbtest "github.com/hyperledger/fabric-x-committer/service/vc/dbtest"
-	"github.com/hyperledger/fabric-x-committer/utils/connection"
-	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
@@ -41,22 +39,17 @@ func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 
 	conn := committerdbtest.PrepareTestEnv(t)
 
-	hostsStr := connection.AddressString(conn.Endpoints...)
-	dsn, err := dbconn.DataSourceName(dbconn.DataSourceNameParams{
-		Username:        conn.User,
-		Password:        conn.Password,
-		EndpointsString: hostsStr,
-		Database:        conn.Database,
-	})
-	require.NoError(t, err, "failed to build DSN")
-
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)
 
-	pool, err := pgxpool.New(ctx, dsn)
+	pool, err := NewPostgres(ctx, Config{
+		Endpoints: conn.Endpoints,
+		User:      conn.User,
+		Password:  conn.Password,
+		DBName:    conn.Database,
+		TLS:       conn.TLS,
+	})
 	require.NoError(t, err, "failed to create connection pool")
-	require.NoError(t, pool.Ping(ctx), "failed to ping database")
-
 	t.Cleanup(pool.Close)
 
 	_, err = pool.Exec(ctx, schemaSQL)

@@ -27,6 +27,7 @@ linters:
     - nilerr
     - nilnesserr
     - nolintlint
+    - paralleltest
     - prealloc
     - revive
     - rowserrcheck
@@ -35,6 +36,7 @@ linters:
     - thelper
     - unconvert
     - unparam
+    - usetesting
     - wastedassign
     - whitespace
     - goheader
@@ -146,6 +148,7 @@ formatters:
       extra-rules: true
     goimports:
       local-prefixes:
+        - github.com/hyperledger
         - github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer
   exclusions:
     generated: lax

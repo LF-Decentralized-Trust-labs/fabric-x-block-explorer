@@ -1,6 +1,7 @@
 -- name: InsertReadOnly :batchexec
 INSERT INTO tx_reads_only (block_num, tx_num, ns_id, key, version)
-VALUES ($1, $2, $3, $4, $5);
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING;
 
 -- name: GetReadsOnlyByTx :many
 SELECT ns_id, key, version

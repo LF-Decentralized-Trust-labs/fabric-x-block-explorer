@@ -20,6 +20,7 @@ var (
 const insertBlindWrite = `-- name: InsertBlindWrite :batchexec
 INSERT INTO tx_blind_writes (block_num, tx_num, ns_id, key, value)
 VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
 `
 
 type InsertBlindWriteBatchResults struct {
@@ -76,6 +77,7 @@ func (b *InsertBlindWriteBatchResults) Close() error {
 const insertReadOnly = `-- name: InsertReadOnly :batchexec
 INSERT INTO tx_reads_only (block_num, tx_num, ns_id, key, version)
 VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
 `
 
 type InsertReadOnlyBatchResults struct {
@@ -132,6 +134,7 @@ func (b *InsertReadOnlyBatchResults) Close() error {
 const insertReadWrite = `-- name: InsertReadWrite :batchexec
 INSERT INTO tx_read_writes (block_num, tx_num, ns_id, key, read_version, value)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
 `
 
 type InsertReadWriteBatchResults struct {
@@ -190,7 +193,7 @@ func (b *InsertReadWriteBatchResults) Close() error {
 const insertTransaction = `-- name: InsertTransaction :batchexec
 INSERT INTO transactions (block_num, tx_num, tx_id, validation_code)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (block_num, tx_num) DO UPDATE SET tx_id = EXCLUDED.tx_id
+ON CONFLICT (block_num, tx_num) DO NOTHING
 `
 
 type InsertTransactionBatchResults struct {
@@ -245,6 +248,7 @@ func (b *InsertTransactionBatchResults) Close() error {
 const insertTxEndorsement = `-- name: InsertTxEndorsement :batchexec
 INSERT INTO tx_endorsements (block_num, tx_num, ns_id, endorsement, msp_id, identity)
 VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (block_num, tx_num, ns_id, endorsement) DO NOTHING
 `
 
 type InsertTxEndorsementBatchResults struct {
@@ -303,7 +307,7 @@ func (b *InsertTxEndorsementBatchResults) Close() error {
 const insertTxNamespace = `-- name: InsertTxNamespace :batchexec
 INSERT INTO tx_namespaces (block_num, tx_num, ns_id, ns_version)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (block_num, tx_num, ns_id) DO UPDATE SET ns_version = EXCLUDED.ns_version
+ON CONFLICT (block_num, tx_num, ns_id) DO NOTHING
 `
 
 type InsertTxNamespaceBatchResults struct {

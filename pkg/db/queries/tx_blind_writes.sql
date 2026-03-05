@@ -1,6 +1,7 @@
 -- name: InsertBlindWrite :batchexec
 INSERT INTO tx_blind_writes (block_num, tx_num, ns_id, key, value)
-VALUES ($1, $2, $3, $4, $5);
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING;
 
 -- name: GetBlindWritesByTx :many
 SELECT ns_id, key, value
