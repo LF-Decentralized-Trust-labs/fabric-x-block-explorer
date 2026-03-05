@@ -1,6 +1,7 @@
 -- name: InsertTxEndorsement :batchexec
 INSERT INTO tx_endorsements (block_num, tx_num, ns_id, endorsement, msp_id, identity)
-VALUES ($1, $2, $3, $4, $5, $6);
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (block_num, tx_num, ns_id, endorsement) DO NOTHING;
 
 -- name: GetEndorsementsByTx :many
 SELECT ns_id, endorsement, msp_id, identity

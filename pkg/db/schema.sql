@@ -1,8 +1,13 @@
 CREATE TABLE IF NOT EXISTS blocks (
-    block_num BIGINT PRIMARY KEY,
-    tx_count INT NOT NULL,
+    block_num     BIGINT PRIMARY KEY,
+    -- tx_count is the number of transactions persisted from this block.
+    -- It excludes envelopes that failed to unmarshal, config transactions
+    -- (which are stored in namespace_policies instead), and any transaction
+    -- whose validation status is not tracked in the DB.
+    -- It does NOT equal the raw envelope count in the Fabric block.
+    tx_count      INT NOT NULL,
     previous_hash BYTEA,
-    data_hash BYTEA
+    data_hash     BYTEA
 );
 
 CREATE TABLE IF NOT EXISTS transactions (

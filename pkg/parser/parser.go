@@ -11,31 +11,37 @@ import (
 	"encoding/json"
 
 	"github.com/cockroachdb/errors"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-protos-go-apiv2/msp"
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
 	committypes "github.com/hyperledger/fabric-x-committer/api/types"
+	"github.com/hyperledger/fabric-x-committer/service/sidecar"
 	"github.com/hyperledger/fabric-x-committer/utils/logging"
 	"github.com/hyperledger/fabric-x-committer/utils/serialization"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
 var logger = logging.New("parser")
 
-// nsData wraps a TxNamespace with transaction metadata.
+// txMeta carries per-transaction context through the parsing chain.
+type txMeta struct {
+	blockNum       uint64
+	txNum          int
+	txID           string
+	validationCode protoblocktx.Status
+}
+
+// nsData wraps a TxNamespace with its associated endorsement bytes.
 type nsData struct {
 	Namespace   *protoblocktx.TxNamespace
-	TxID        string
 	Endorsement []byte
 }
 
-// Parse extracts transactions and write-sets from a Fabric block and returns
-// the data organised in the hierarchical ParsedBlockData structure alongside
-// a BlockInfo containing the block header metadata.
+// Parse extracts transactions and write-sets from a Fabric block into ParsedBlockData and BlockInfo.
 func Parse(b *common.Block) (*types.ParsedBlockData, *types.BlockInfo, error) {
 	header := b.GetHeader()
 	if header == nil {
@@ -71,54 +77,102 @@ func parseTxData(
 	txFilter []byte,
 ) ([]types.TxRecord, []types.NamespacePolicyRecord) {
 	transactions := make([]types.TxRecord, 0, len(data))
-	policies := make([]types.NamespacePolicyRecord, 0, len(data))
+	policies := make([]types.NamespacePolicyRecord, 0)
 
 	for txNum, envBytes := range data {
 		if txNum >= len(txFilter) {
 			continue
 		}
-
 		validationCode := protoblocktx.Status(txFilter[txNum])
-		if validationCode != protoblocktx.Status_COMMITTED {
-			continue
+		txRec, policyItems := handleTx(header, txNum, envBytes, validationCode)
+		policies = append(policies, policyItems...)
+		if txRec != nil {
+			transactions = append(transactions, *txRec)
 		}
-
-		env := &common.Envelope{}
-		if err := proto.Unmarshal(envBytes, env); err != nil {
-			logger.Warnf("block %d tx %d invalid envelope: %v", header.Number, txNum, err)
-			continue
-		}
-
-		if policyItems, ok := extractPolicies(env); ok {
-			policies = append(policies, policyItems...)
-			continue
-		}
-
-		nsList, err := rwSets(env)
-		if err != nil {
-			logger.Warnf("block %d tx %d invalid rwset: %v", header.Number, txNum, err)
-			continue
-		}
-
-		if len(nsList) == 0 {
-			continue
-		}
-
-		transactions = append(transactions, buildTxRecord(txNum, validationCode, nsList))
 	}
 
 	return transactions, policies
 }
 
-func buildTxRecord(
+func handleTx(
+	header *common.BlockHeader,
 	txNum int,
+	envBytes []byte,
 	validationCode protoblocktx.Status,
-	nsList []nsData,
-) types.TxRecord {
+) (*types.TxRecord, []types.NamespacePolicyRecord) {
+	env := &common.Envelope{}
+	if err := proto.Unmarshal(envBytes, env); err != nil {
+		logger.Warnf("block %d tx %d invalid envelope: %v", header.Number, txNum, err)
+		return nil, nil
+	}
+
+	// Parsed once; pl and chdr are reused by all call sites below.
+	pl, chdr, err := serialization.ParseEnvelope(env)
+	if err != nil {
+		logger.Warnf("block %d tx %d unparseable payload: %v", header.Number, txNum, err)
+		return nil, nil
+	}
+
+	// Config txs go to namespace_policies and have no tx_id; check before validating tx_id.
+	if policyItems, ok := extractCommittedPolicies(validationCode, pl, chdr); ok {
+		return nil, policyItems
+	}
+
+	txID := chdr.TxId
+	if txID == "" {
+		logger.Warnf("block %d tx %d: missing or invalid tx_id", header.Number, txNum)
+		return nil, nil
+	}
+
+	if !sidecar.IsStatusStoredInDB(validationCode) {
+		logger.Warnf("block %d tx %d: status %s not stored in DB", header.Number, txNum, &validationCode)
+		return nil, nil
+	}
+
+	meta := txMeta{
+		blockNum:       header.Number,
+		txNum:          txNum,
+		txID:           txID,
+		validationCode: validationCode,
+	}
+	return parseTxRecord(meta, pl), nil
+}
+
+// parseTxRecord builds a TxRecord: full when rwsets parse, minimal (no namespaces)
+// for invalid txs with bad rwsets, nil for committed txs with bad rwsets.
+func parseTxRecord(meta txMeta, pl *common.Payload) *types.TxRecord {
+	nsList, err := extractNamespaceData(meta.txID, pl)
+	if err != nil {
+		logger.Warnf("block %d tx %d invalid rwset: %v", meta.blockNum, meta.txNum, err)
+	}
+
+	// Non-COMMITTED txs are always stored, even without parseable rwsets.
+	if err != nil || len(nsList) == 0 {
+		if meta.validationCode != protoblocktx.Status_COMMITTED {
+			rec := buildMinimalTxRecord(meta)
+			return &rec
+		}
+		return nil
+	}
+
+	rec := buildTxRecord(meta, nsList)
+	return &rec
+}
+
+// buildMinimalTxRecord returns a TxRecord with no namespace data.
+func buildMinimalTxRecord(meta txMeta) types.TxRecord {
+	return types.TxRecord{
+		TxNum:          uint64(meta.txNum), //nolint:gosec // txNum is a range index, always non-negative
+		TxID:           meta.txID,
+		ValidationCode: meta.validationCode,
+	}
+}
+
+func buildTxRecord(meta txMeta, nsList []nsData) types.TxRecord {
 	txRecord := types.TxRecord{
-		TxNum:          uint64(txNum), //nolint:gosec // txNum originates from a range index and is always non-negative
-		TxID:           nsList[0].TxID,
-		ValidationCode: validationCode,
+		TxNum:          uint64(meta.txNum), //nolint:gosec // txNum is a range index, always non-negative
+		TxID:           meta.txID,
+		ValidationCode: meta.validationCode,
 		Namespaces:     make([]types.TxNamespaceRecord, 0, len(nsList)),
 	}
 
@@ -151,7 +205,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 	}
 
 	for _, ro := range ns.ReadsOnly {
-		roRecord := types.ReadOnlyRecord{Key: string(ro.Key)}
+		roRecord := types.ReadOnlyRecord{Key: ro.Key}
 		if ro.Version != nil && *ro.Version > 0 {
 			roRecord.Version = ro.Version
 		}
@@ -160,7 +214,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 
 	for _, rw := range ns.ReadWrites {
 		rwRecord := types.ReadWriteRecord{
-			Key:   string(rw.Key),
+			Key:   rw.Key,
 			Value: rw.Value,
 		}
 		if rw.Version != nil && *rw.Version > 0 {
@@ -171,7 +225,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 
 	for _, bw := range ns.BlindWrites {
 		nsRecord.BlindWrites = append(nsRecord.BlindWrites, types.BlindWriteRecord{
-			Key:   string(bw.Key),
+			Key:   bw.Key,
 			Value: bw.Value,
 		})
 	}
@@ -179,15 +233,26 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 	return nsRecord
 }
 
-// policyToJSON converts protobuf policy bytes to a JSON object with base64-encoded policy.
+// policyEncoding is the JSON shape for a serialised policy value.
+type policyEncoding struct {
+	PolicyBytes string `json:"policy_bytes"`
+}
+
+// identityEncoding is the JSON shape for a parsed endorser identity.
+type identityEncoding struct {
+	MspID   string `json:"mspid"`
+	IDBytes string `json:"id_bytes"`
+}
+
+// policyToJSON encodes raw policy bytes as a JSON object with a base64 "policy_bytes" field.
 func policyToJSON(policyBytes []byte) (json.RawMessage, error) {
-	return json.Marshal(map[string]string{
-		"policy_bytes": base64.StdEncoding.EncodeToString(policyBytes),
+	return json.Marshal(policyEncoding{
+		PolicyBytes: base64.StdEncoding.EncodeToString(policyBytes),
 	})
 }
 
-// endorsementToIdentityJSON extracts identity information from endorsement protobuf.
-func endorsementToIdentityJSON(endorsementBytes []byte) (*string, []byte, error) {
+// endorsementToIdentityJSON extracts the MSP ID and identity JSON from a serialised endorsement.
+func endorsementToIdentityJSON(endorsementBytes []byte) (*string, json.RawMessage, error) {
 	endorsement := &peer.Endorsement{}
 	if err := proto.Unmarshal(endorsementBytes, endorsement); err != nil {
 		return nil, nil, errors.Wrap(err, "failed to unmarshal endorsement")
@@ -200,12 +265,10 @@ func endorsementToIdentityJSON(endorsementBytes []byte) (*string, []byte, error)
 
 	mspID := serializedID.Mspid
 
-	identityData := map[string]any{
-		"mspid":    mspID,
-		"id_bytes": base64.StdEncoding.EncodeToString(serializedID.IdBytes),
-	}
-
-	identityJSON, err := json.Marshal(identityData)
+	identityJSON, err := json.Marshal(identityEncoding{
+		MspID:   mspID,
+		IDBytes: base64.StdEncoding.EncodeToString(serializedID.IdBytes),
+	})
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "failed to marshal identity")
 	}
@@ -213,11 +276,17 @@ func endorsementToIdentityJSON(endorsementBytes []byte) (*string, []byte, error)
 	return &mspID, identityJSON, nil
 }
 
-func extractPolicies(env *common.Envelope) ([]types.NamespacePolicyRecord, bool) {
-	pl, chdr, err := serialization.ParseEnvelope(env)
-	if err != nil {
+// extractCommittedPolicies returns policy records for COMMITTED config transactions; nil, false otherwise.
+func extractCommittedPolicies(
+	code protoblocktx.Status, pl *common.Payload, chdr *common.ChannelHeader,
+) ([]types.NamespacePolicyRecord, bool) {
+	if code != protoblocktx.Status_COMMITTED {
 		return nil, false
 	}
+	return extractPolicies(pl, chdr)
+}
+
+func extractPolicies(pl *common.Payload, chdr *common.ChannelHeader) ([]types.NamespacePolicyRecord, bool) {
 	if chdr.Type != int32(common.HeaderType_CONFIG) && chdr.Type != int32(common.HeaderType_CONFIG_UPDATE) {
 		return nil, false
 	}
@@ -231,7 +300,11 @@ func extractPolicies(env *common.Envelope) ([]types.NamespacePolicyRecord, bool)
 
 func extractNamespacePolicies(data []byte) ([]types.NamespacePolicyRecord, bool) {
 	policies := &protoblocktx.NamespacePolicies{}
-	if err := proto.Unmarshal(data, policies); err != nil || len(policies.Policies) == 0 {
+	if err := proto.Unmarshal(data, policies); err != nil {
+		logger.Debugf("data is not NamespacePolicies proto: %v", err)
+		return nil, false
+	}
+	if len(policies.Policies) == 0 {
 		return nil, false
 	}
 
@@ -263,7 +336,11 @@ func extractNamespacePolicies(data []byte) ([]types.NamespacePolicyRecord, bool)
 
 func extractConfigTxPolicy(data []byte) ([]types.NamespacePolicyRecord, bool) {
 	configTx := &protoblocktx.ConfigTransaction{}
-	if err := proto.Unmarshal(data, configTx); err != nil || len(configTx.Envelope) == 0 {
+	if err := proto.Unmarshal(data, configTx); err != nil {
+		logger.Debugf("data is not ConfigTransaction proto: %v", err)
+		return nil, false
+	}
+	if len(configTx.Envelope) == 0 {
 		return nil, false
 	}
 
@@ -282,14 +359,8 @@ func extractConfigTxPolicy(data []byte) ([]types.NamespacePolicyRecord, bool) {
 	}, true
 }
 
-// rwSets extracts namespace data and txID from an envelope.
-func rwSets(env *common.Envelope) ([]nsData, error) {
-	pl, chdr, err := serialization.ParseEnvelope(env)
-	if err != nil {
-		return nil, errors.Wrap(err, "envelope")
-	}
-	txID := chdr.TxId
-
+// extractNamespaceData unmarshals the tx payload and returns one nsData per namespace with its endorsement.
+func extractNamespaceData(txID string, pl *common.Payload) ([]nsData, error) {
 	tx, err := serialization.UnmarshalTx(pl.Data)
 	if err != nil {
 		return nil, errors.Wrap(err, "transaction")
@@ -312,7 +383,6 @@ func rwSets(env *common.Envelope) ([]nsData, error) {
 
 		out = append(out, nsData{
 			Namespace:   ns,
-			TxID:        txID,
 			Endorsement: endorsement,
 		})
 	}

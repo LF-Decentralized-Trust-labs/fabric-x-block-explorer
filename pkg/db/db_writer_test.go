@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
+
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
@@ -38,13 +40,13 @@ func TestWriteProcessedBlock(t *testing.T) {
 						NsID:      "mycc",
 						NsVersion: 1,
 						ReadWrites: []types.ReadWriteRecord{
-							{Key: "key1", ReadVersion: util.Ptr(uint64(10)), Value: []byte("value1")},
+							{Key: []byte("key1"), ReadVersion: util.Ptr(uint64(10)), Value: []byte("value1")},
 						},
 						Endorsements: []types.EndorsementRecord{
 							{
 								Endorsement: []byte("endorsement_sig"),
 								MspID:       util.Ptr("Org1MSP"),
-								Identity:    []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`),
+								Identity:    json.RawMessage(`{"mspid":"Org1MSP","id_bytes":"cert"}`),
 							},
 						},
 					},
@@ -106,7 +108,7 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 						NsID:      "testcc",
 						NsVersion: 1,
 						BlindWrites: []types.BlindWriteRecord{
-							{Key: "blindkey", Value: []byte("blindvalue")},
+							{Key: []byte("blindkey"), Value: []byte("blindvalue")},
 						},
 					},
 				},
@@ -155,7 +157,7 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 						NsID:      "cc1",
 						NsVersion: 1,
 						BlindWrites: []types.BlindWriteRecord{
-							{Key: "key1", Value: []byte("val1")},
+							{Key: []byte("key1"), Value: []byte("val1")},
 						},
 					},
 				},
@@ -169,7 +171,7 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 						NsID:      "cc2",
 						NsVersion: 1,
 						BlindWrites: []types.BlindWriteRecord{
-							{Key: "key2", Value: []byte("val2")},
+							{Key: []byte("key2"), Value: []byte("val2")},
 						},
 					},
 				},
@@ -380,4 +382,70 @@ func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 
 	env.AssertBlockExists(t, 7)
 	assert.Equal(t, int64(0), env.GetTransactionCount(t))
+}
+
+// TestWriteInvalidTransaction verifies that transactions with non-COMMITTED
+// validation codes are stored with the correct status and without namespace data.
+func TestWriteInvalidTransaction(t *testing.T) {
+	t.Parallel()
+	env := NewDatabaseTestEnv(t)
+	ctx := t.Context()
+
+	committedTxID := "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	invalidTxID := "0000000000000000000000000000000000000000000000000000000000000099"
+
+	parsedData := &types.ParsedBlockData{
+		Transactions: []types.TxRecord{
+			{
+				TxNum:          0,
+				TxID:           committedTxID,
+				ValidationCode: protoblocktx.Status_COMMITTED,
+				Namespaces: []types.TxNamespaceRecord{
+					{
+						NsID:      "cc",
+						NsVersion: 1,
+						BlindWrites: []types.BlindWriteRecord{
+							{Key: []byte("k"), Value: []byte("v")},
+						},
+					},
+				},
+			},
+			{
+				// Minimal record: no namespaces, as produced by buildMinimalTxRecord.
+				TxNum:          1,
+				TxID:           invalidTxID,
+				ValidationCode: protoblocktx.Status_ABORTED_MVCC_CONFLICT,
+			},
+		},
+	}
+
+	processedBlock := &types.ProcessedBlock{
+		BlockInfo: &types.BlockInfo{
+			Number:       10,
+			PreviousHash: []byte("prev10"),
+			DataHash:     []byte("data10"),
+		},
+		Data: parsedData,
+	}
+
+	writer := NewBlockWriter(env.Pool)
+	require.NoError(t, writer.WriteProcessedBlock(ctx, processedBlock))
+
+	// Both the committed and the invalid transaction must be persisted.
+	assert.Equal(t, int64(2), env.GetTransactionCount(t))
+
+	// The invalid transaction must carry the correct validation code.
+	invalidTxIDBytes, err := hex.DecodeString(invalidTxID)
+	require.NoError(t, err)
+	tx, err := env.Queries.GetValidationCodeByTxID(ctx, invalidTxIDBytes)
+	require.NoError(t, err)
+	assert.Equal(t, int16(protoblocktx.Status_ABORTED_MVCC_CONFLICT), tx.ValidationCode)
+	assert.Equal(t, int64(1), tx.TxNum)
+
+	// The invalid transaction must have no namespace rows.
+	var nsCount int64
+	q := `SELECT COUNT(*) FROM tx_namespaces WHERE block_num = $1 AND tx_num = 1`
+	err = env.Pool.QueryRow(ctx, q, int64(10)).Scan(&nsCount)
+	require.NoError(t, err)
+	assert.Equal(t, int64(0), nsCount)
 }

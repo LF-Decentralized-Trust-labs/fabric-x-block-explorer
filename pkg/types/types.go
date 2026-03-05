@@ -13,7 +13,9 @@ import (
 )
 
 type (
-	// ParsedBlockData contains all parsed data from a block, organized by transaction.
+	// ParsedBlockData holds parsed block data ready for persistence.
+	// Transactions contains only records that will be stored (excludes bad envelopes,
+	// config txs, and untracked statuses); its length maps to blocks.tx_count.
 	ParsedBlockData struct {
 		Transactions []TxRecord
 		Policies     []NamespacePolicyRecord
@@ -42,8 +44,7 @@ type (
 		Namespaces     []TxNamespaceRecord
 	}
 
-	// TxNamespaceRecord represents a single (transaction, namespace) pair entry,
-	// containing all reads, writes, and endorsements for that namespace.
+	// TxNamespaceRecord holds all reads, writes, and endorsements for one (tx, namespace) pair.
 	TxNamespaceRecord struct {
 		NsID         string
 		NsVersion    uint64
@@ -55,30 +56,30 @@ type (
 )
 
 type (
-	// ReadOnlyRecord represents a read-only operation within a namespace.
+	// ReadOnlyRecord is a key read but not written; Version is nil if the key was absent.
 	ReadOnlyRecord struct {
-		Key     string
+		Key     []byte
 		Version *uint64
 	}
 
-	// ReadWriteRecord represents a read-write operation within a namespace.
+	// ReadWriteRecord is a key both read and written; ReadVersion is nil if the key was absent.
 	ReadWriteRecord struct {
-		Key         string
+		Key         []byte
 		ReadVersion *uint64
 		Value       []byte
 	}
 
-	// BlindWriteRecord represents a blind write operation within a namespace.
+	// BlindWriteRecord is a key written without a prior read (no MVCC version check).
 	BlindWriteRecord struct {
-		Key   string
+		Key   []byte
 		Value []byte
 	}
 
-	// EndorsementRecord represents a signature endorsement for a namespace.
+	// EndorsementRecord holds raw endorsement bytes and the parsed MSP identity.
 	EndorsementRecord struct {
 		Endorsement []byte
 		MspID       *string
-		Identity    []byte
+		Identity    json.RawMessage
 	}
 
 	// NamespacePolicyRecord represents a policy update for a namespace.
