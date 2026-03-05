@@ -8,10 +8,12 @@ package db
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/hyperledger/fabric-x-committer/utils/connection"
+	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
 )
 
 // Config holds PostgreSQL connection configuration.
@@ -21,31 +23,35 @@ type Config struct {
 	User     string
 	Password string //nolint:gosec // intentional: field holds a connection credential
 	DBName   string
-	SSLMode  string
+	TLS      dbconn.DatabaseTLSConfig
 	MaxConns int
 }
 
 // NewPostgres creates a new pgx connection pool using the given config.
 func NewPostgres(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
-	if cfg.SSLMode == "" {
-		cfg.SSLMode = "disable"
-	}
 	if cfg.MaxConns <= 0 {
 		cfg.MaxConns = 20
 	}
 
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s:%d/%s?sslmode=%s&pool_max_conns=%d",
-		cfg.User,
-		cfg.Password,
-		cfg.Host,
-		cfg.Port,
-		cfg.DBName,
-		cfg.SSLMode,
-		cfg.MaxConns,
-	)
+	endpoint := &connection.Endpoint{Host: cfg.Host, Port: cfg.Port}
+	dsn, err := dbconn.DataSourceName(dbconn.DataSourceNameParams{
+		Username:        cfg.User,
+		Password:        cfg.Password,
+		EndpointsString: endpoint.Address(),
+		Database:        cfg.DBName,
+		TLS:             cfg.TLS,
+	})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to build DSN")
+	}
 
-	pool, err := pgxpool.New(ctx, dsn)
+	poolCfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse pool config")
+	}
+	poolCfg.MaxConns = int32(cfg.MaxConns) //nolint:gosec // MaxConns is validated above
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create pgx pool")
 	}

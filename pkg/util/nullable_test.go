@@ -23,7 +23,7 @@ func TestNullableInt64ToPtr(t *testing.T) {
 		{
 			name:  "valid int64",
 			input: pgtype.Int8{Int64: 42, Valid: true},
-			want:  ptr(int64(42)),
+			want:  Ptr(int64(42)),
 		},
 		{
 			name:  "null int64",
@@ -33,12 +33,12 @@ func TestNullableInt64ToPtr(t *testing.T) {
 		{
 			name:  "zero value",
 			input: pgtype.Int8{Int64: 0, Valid: true},
-			want:  ptr(int64(0)),
+			want:  Ptr(int64(0)),
 		},
 		{
 			name:  "negative value",
 			input: pgtype.Int8{Int64: -100, Valid: true},
-			want:  ptr(int64(-100)),
+			want:  Ptr(int64(-100)),
 		},
 	}
 
@@ -66,7 +66,7 @@ func TestNullableStringToPtr(t *testing.T) {
 		{
 			name:  "valid string",
 			input: pgtype.Text{String: "hello", Valid: true},
-			want:  ptr("hello"),
+			want:  Ptr("hello"),
 		},
 		{
 			name:  "null string",
@@ -76,12 +76,12 @@ func TestNullableStringToPtr(t *testing.T) {
 		{
 			name:  "empty string",
 			input: pgtype.Text{String: "", Valid: true},
-			want:  ptr(""),
+			want:  Ptr(""),
 		},
 		{
 			name:  "string with spaces",
 			input: pgtype.Text{String: "  spaces  ", Valid: true},
-			want:  ptr("  spaces  "),
+			want:  Ptr("  spaces  "),
 		},
 	}
 
@@ -108,7 +108,7 @@ func TestPtrToNullableInt64(t *testing.T) {
 	}{
 		{
 			name:  "valid uint64",
-			input: ptr(uint64(42)),
+			input: Ptr(uint64(42)),
 			want:  pgtype.Int8{Int64: 42, Valid: true},
 		},
 		{
@@ -118,12 +118,12 @@ func TestPtrToNullableInt64(t *testing.T) {
 		},
 		{
 			name:  "zero value",
-			input: ptr(uint64(0)),
+			input: Ptr(uint64(0)),
 			want:  pgtype.Int8{Int64: 0, Valid: true},
 		},
 		{
 			name:  "large value",
-			input: ptr(uint64(1234567890)),
+			input: Ptr(uint64(1234567890)),
 			want:  pgtype.Int8{Int64: 1234567890, Valid: true},
 		},
 	}
@@ -149,7 +149,7 @@ func TestPtrToNullableString(t *testing.T) {
 	}{
 		{
 			name:  "valid string",
-			input: ptr("hello"),
+			input: Ptr("hello"),
 			want:  pgtype.Text{String: "hello", Valid: true},
 		},
 		{
@@ -159,12 +159,12 @@ func TestPtrToNullableString(t *testing.T) {
 		},
 		{
 			name:  "empty string",
-			input: ptr(""),
+			input: Ptr(""),
 			want:  pgtype.Text{String: "", Valid: true},
 		},
 		{
 			name:  "string with special characters",
-			input: ptr("test\nline\ttab"),
+			input: Ptr("test\nline\ttab"),
 			want:  pgtype.Text{String: "test\nline\ttab", Valid: true},
 		},
 	}
@@ -179,9 +179,4 @@ func TestPtrToNullableString(t *testing.T) {
 			}
 		})
 	}
-}
-
-// Helper function to create pointers.
-func ptr[T any](v T) *T {
-	return &v
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
 
 func TestParse(t *testing.T) {
@@ -40,6 +42,25 @@ func TestParse(t *testing.T) {
 				},
 			},
 			expectError: true,
+		},
+		{
+			name: "nil block data treats as empty",
+			block: &common.Block{
+				Header: &common.BlockHeader{
+					Number: 3,
+				},
+				Data: nil,
+				Metadata: &common.BlockMetadata{
+					Metadata: [][]byte{
+						{}, // SIGNATURES
+						{}, // LAST_CONFIG
+						{}, // TRANSACTIONS_FILTER
+					},
+				},
+			},
+			expectError:      false,
+			expectedBlockNum: 3,
+			expectedTxCount:  0,
 		},
 		{
 			name: "empty block with valid structure",
@@ -92,13 +113,13 @@ func TestParseBlockWithTransaction(t *testing.T) {
 			{
 				Key:     []byte("key1"),
 				Value:   []byte("value1"),
-				Version: uint64Ptr(10),
+				Version: util.Ptr(uint64(10)),
 			},
 		},
 		ReadsOnly: []*protoblocktx.Read{
 			{
 				Key:     []byte("key2"),
-				Version: uint64Ptr(5),
+				Version: util.Ptr(uint64(5)),
 			},
 		},
 	}
@@ -158,7 +179,6 @@ func TestParseBlockWithTransaction(t *testing.T) {
 	require.Len(t, parsedData.Transactions, 1)
 	tx := parsedData.Transactions[0]
 	assert.Equal(t, "tx123", tx.TxID)
-	assert.Equal(t, uint64(10), tx.BlockNum)
 
 	require.Len(t, tx.Namespaces, 1)
 	nsRec := tx.Namespaces[0]
@@ -267,7 +287,7 @@ func TestRWSets(t *testing.T) {
 		NsId:      "chaincode1",
 		NsVersion: 2,
 		ReadWrites: []*protoblocktx.ReadWrite{
-			{Key: []byte("key1"), Value: []byte("value1"), Version: uint64Ptr(1)},
+			{Key: []byte("key1"), Value: []byte("value1"), Version: util.Ptr(uint64(1))},
 		},
 	}
 
@@ -320,13 +340,15 @@ func TestParseWithBlindWrites(t *testing.T) {
 	tx := &protoblocktx.Tx{
 		Namespaces: []*protoblocktx.TxNamespace{ns},
 	}
-	txBytes, _ := proto.Marshal(tx)
+	txBytes, err := proto.Marshal(tx)
+	require.NoError(t, err)
 
 	chdr := &common.ChannelHeader{
 		Type: int32(common.HeaderType_ENDORSER_TRANSACTION),
 		TxId: "tx_blind",
 	}
-	chdrBytes, _ := proto.Marshal(chdr)
+	chdrBytes, err := proto.Marshal(chdr)
+	require.NoError(t, err)
 
 	payload := &common.Payload{
 		Header: &common.Header{
@@ -334,12 +356,14 @@ func TestParseWithBlindWrites(t *testing.T) {
 		},
 		Data: txBytes,
 	}
-	payloadBytes, _ := proto.Marshal(payload)
+	payloadBytes, err := proto.Marshal(payload)
+	require.NoError(t, err)
 
 	env := &common.Envelope{
 		Payload: payloadBytes,
 	}
-	envBytes, _ := proto.Marshal(env)
+	envBytes, err := proto.Marshal(env)
+	require.NoError(t, err)
 
 	block := &common.Block{
 		Header: &common.BlockHeader{
@@ -398,12 +422,14 @@ func TestParseConfigTransaction(t *testing.T) {
 		Version:  1,
 		Envelope: []byte("config_envelope_data"),
 	}
-	configBytes, _ := proto.Marshal(configTx)
+	configBytes, err := proto.Marshal(configTx)
+	require.NoError(t, err)
 
 	chdr := &common.ChannelHeader{
 		Type: int32(common.HeaderType_CONFIG),
 	}
-	chdrBytes, _ := proto.Marshal(chdr)
+	chdrBytes, err := proto.Marshal(chdr)
+	require.NoError(t, err)
 
 	payload := &common.Payload{
 		Header: &common.Header{
@@ -411,12 +437,14 @@ func TestParseConfigTransaction(t *testing.T) {
 		},
 		Data: configBytes,
 	}
-	payloadBytes, _ := proto.Marshal(payload)
+	payloadBytes, err := proto.Marshal(payload)
+	require.NoError(t, err)
 
 	env := &common.Envelope{
 		Payload: payloadBytes,
 	}
-	envBytes, _ := proto.Marshal(env)
+	envBytes, err := proto.Marshal(env)
+	require.NoError(t, err)
 
 	block := &common.Block{
 		Header: &common.BlockHeader{
@@ -442,10 +470,6 @@ func TestParseConfigTransaction(t *testing.T) {
 }
 
 // Helper functions
-
-func uint64Ptr(v uint64) *uint64 {
-	return &v
-}
 
 func createEnvelope(t *testing.T, chdr *common.ChannelHeader, data []byte) *common.Envelope {
 	t.Helper()

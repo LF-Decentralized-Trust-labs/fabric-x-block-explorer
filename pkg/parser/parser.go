@@ -17,13 +17,14 @@ import (
 	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
 	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
 	committypes "github.com/hyperledger/fabric-x-committer/api/types"
-	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric-x-committer/utils/logging"
+	"github.com/hyperledger/fabric-x-committer/utils/serialization"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-var logger = flogging.MustGetLogger("parser")
+var logger = logging.New("parser")
 
 // nsData wraps a TxNamespace with transaction metadata.
 type nsData struct {
@@ -52,7 +53,11 @@ func Parse(b *common.Block) (*types.ParsedBlockData, *types.BlockInfo, error) {
 	}
 
 	txFilter := b.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER]
-	transactions, policies := parseTxData(header, b.Data.Data, txFilter)
+	var rawData [][]byte
+	if b.Data != nil {
+		rawData = b.Data.Data
+	}
+	transactions, policies := parseTxData(header, rawData, txFilter)
 
 	return &types.ParsedBlockData{
 		Transactions: transactions,
@@ -60,7 +65,6 @@ func Parse(b *common.Block) (*types.ParsedBlockData, *types.BlockInfo, error) {
 	}, blockInfo, nil
 }
 
-// parseTxData iterates over the raw envelope data and builds transaction and policy records.
 func parseTxData(
 	header *common.BlockHeader,
 	data [][]byte,
@@ -100,24 +104,21 @@ func parseTxData(
 			continue
 		}
 
-		transactions = append(transactions, buildTxRecord(header, txNum, validationCode, nsList))
+		transactions = append(transactions, buildTxRecord(txNum, validationCode, nsList))
 	}
 
 	return transactions, policies
 }
 
-// buildTxRecord constructs a TxRecord from a parsed namespace list.
 func buildTxRecord(
-	header *common.BlockHeader,
 	txNum int,
 	validationCode protoblocktx.Status,
 	nsList []nsData,
 ) types.TxRecord {
 	txRecord := types.TxRecord{
-		BlockNum:       header.Number,
 		TxNum:          uint64(txNum), //nolint:gosec // txNum originates from a range index and is always non-negative
 		TxID:           nsList[0].TxID,
-		ValidationCode: int32(validationCode),
+		ValidationCode: validationCode,
 		Namespaces:     make([]types.TxNamespaceRecord, 0, len(nsList)),
 	}
 
@@ -128,7 +129,6 @@ func buildTxRecord(
 	return txRecord
 }
 
-// buildTxNamespaceRecord constructs a TxNamespaceRecord from a single nsData entry.
 func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 	ns := nd.Namespace
 	nsRecord := types.TxNamespaceRecord{
@@ -140,18 +140,14 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 	}
 
 	if len(nd.Endorsement) > 0 {
-		mspID, identityJSON, err := endorsementToIdentityJSON(nd.Endorsement)
-		if err != nil {
-			nsRecord.Endorsements = append(nsRecord.Endorsements, types.EndorsementRecord{
-				Endorsement: nd.Endorsement,
-			})
+		rec := types.EndorsementRecord{Endorsement: nd.Endorsement}
+		if mspID, identityJSON, err := endorsementToIdentityJSON(nd.Endorsement); err == nil {
+			rec.MspID = mspID
+			rec.Identity = identityJSON
 		} else {
-			nsRecord.Endorsements = append(nsRecord.Endorsements, types.EndorsementRecord{
-				Endorsement: nd.Endorsement,
-				MspID:       mspID,
-				Identity:    identityJSON,
-			})
+			logger.Warnf("failed to parse endorsement identity: %v", err)
 		}
+		nsRecord.Endorsements = []types.EndorsementRecord{rec}
 	}
 
 	for _, ro := range ns.ReadsOnly {
@@ -205,7 +201,7 @@ func endorsementToIdentityJSON(endorsementBytes []byte) (*string, []byte, error)
 	mspID := serializedID.Mspid
 
 	identityData := map[string]any{
-		"mspid":    serializedID.Mspid,
+		"mspid":    mspID,
 		"id_bytes": base64.StdEncoding.EncodeToString(serializedID.IdBytes),
 	}
 
@@ -217,18 +213,9 @@ func endorsementToIdentityJSON(endorsementBytes []byte) (*string, []byte, error)
 	return &mspID, identityJSON, nil
 }
 
-// extractPolicies parses namespace policy updates from the envelope.
 func extractPolicies(env *common.Envelope) ([]types.NamespacePolicyRecord, bool) {
-	pl := &common.Payload{}
-	if err := proto.Unmarshal(env.Payload, pl); err != nil {
-		return nil, false
-	}
-
-	chdr := &common.ChannelHeader{}
-	if pl.Header == nil || pl.Header.ChannelHeader == nil {
-		return nil, false
-	}
-	if err := proto.Unmarshal(pl.Header.ChannelHeader, chdr); err != nil {
+	pl, chdr, err := serialization.ParseEnvelope(env)
+	if err != nil {
 		return nil, false
 	}
 	if chdr.Type != int32(common.HeaderType_CONFIG) && chdr.Type != int32(common.HeaderType_CONFIG_UPDATE) {
@@ -242,7 +229,6 @@ func extractPolicies(env *common.Envelope) ([]types.NamespacePolicyRecord, bool)
 	return extractConfigTxPolicy(pl.Data)
 }
 
-// extractNamespacePolicies parses a NamespacePolicies proto from data and returns policy records.
 func extractNamespacePolicies(data []byte) ([]types.NamespacePolicyRecord, bool) {
 	policies := &protoblocktx.NamespacePolicies{}
 	if err := proto.Unmarshal(data, policies); err != nil || len(policies.Policies) == 0 {
@@ -275,7 +261,6 @@ func extractNamespacePolicies(data []byte) ([]types.NamespacePolicyRecord, bool)
 	return items, true
 }
 
-// extractConfigTxPolicy parses a ConfigTransaction proto from data and returns a policy record.
 func extractConfigTxPolicy(data []byte) ([]types.NamespacePolicyRecord, bool) {
 	configTx := &protoblocktx.ConfigTransaction{}
 	if err := proto.Unmarshal(data, configTx); err != nil || len(configTx.Envelope) == 0 {
@@ -299,27 +284,18 @@ func extractConfigTxPolicy(data []byte) ([]types.NamespacePolicyRecord, bool) {
 
 // rwSets extracts namespace data and txID from an envelope.
 func rwSets(env *common.Envelope) ([]nsData, error) {
-	out := []nsData{}
-
-	pl := &common.Payload{}
-	if err := proto.Unmarshal(env.Payload, pl); err != nil {
-		return out, errors.Wrap(err, "payload")
-	}
-
-	if pl.Header == nil || pl.Header.ChannelHeader == nil {
-		return out, errors.New("missing header in payload")
-	}
-
-	chdr := &common.ChannelHeader{}
-	if err := proto.Unmarshal(pl.Header.ChannelHeader, chdr); err != nil {
-		return out, errors.Wrap(err, "channel header")
+	pl, chdr, err := serialization.ParseEnvelope(env)
+	if err != nil {
+		return nil, errors.Wrap(err, "envelope")
 	}
 	txID := chdr.TxId
 
-	tx := &protoblocktx.Tx{}
-	if err := proto.Unmarshal(pl.Data, tx); err != nil {
-		return out, errors.Wrap(err, "transaction")
+	tx, err := serialization.UnmarshalTx(pl.Data)
+	if err != nil {
+		return nil, errors.Wrap(err, "transaction")
 	}
+
+	out := make([]nsData, 0, len(tx.Namespaces))
 
 	if len(tx.Signatures) > 0 && len(tx.Signatures) != len(tx.Namespaces) {
 		logger.Warnf(

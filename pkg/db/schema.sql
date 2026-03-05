@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     block_num BIGINT NOT NULL REFERENCES blocks(block_num),
     tx_num    BIGINT NOT NULL,
     tx_id     BYTEA  NOT NULL,
-    validation_code BIGINT NOT NULL,
+    validation_code SMALLINT NOT NULL,
     PRIMARY KEY (block_num, tx_num)
 );
 
