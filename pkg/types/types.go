@@ -8,6 +8,8 @@ package types
 
 import (
 	"encoding/json"
+
+	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
 )
 
 type (
@@ -19,8 +21,7 @@ type (
 
 	// ProcessedBlock wraps parsed block data with metadata for persistence.
 	ProcessedBlock struct {
-		Txns      int
-		Data      any
+		Data      *ParsedBlockData
 		BlockInfo *BlockInfo
 	}
 
@@ -35,10 +36,9 @@ type (
 type (
 	// TxRecord groups all data for a single transaction within a block.
 	TxRecord struct {
-		BlockNum       uint64
 		TxNum          uint64
 		TxID           string
-		ValidationCode int32
+		ValidationCode protoblocktx.Status
 		Namespaces     []TxNamespaceRecord
 	}
 

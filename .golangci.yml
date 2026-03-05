@@ -45,6 +45,8 @@ linters:
           deny:
             - pkg: github.com/pkg/errors
               desc: github.com/pkg/errors is no longer maintained
+            - pkg: github.com/hyperledger/fabric/common/flogging
+              desc: use github.com/hyperledger/fabric-x-committer/utils/logging instead
     errcheck:
       check-type-assertions: true
     errorlint:

@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestDatabaseTestEnv verifies that the test infrastructure works correctly.
 func TestDatabaseTestEnv(t *testing.T) {
 	t.Parallel()
 	env := NewDatabaseTestEnv(t)
@@ -34,7 +33,6 @@ func TestDatabaseTestEnv(t *testing.T) {
 	assert.True(t, tableExists, "blocks table should exist")
 }
 
-// TestNewPostgres verifies the NewPostgres function creates a valid connection pool.
 func TestNewPostgres(t *testing.T) {
 	t.Parallel()
 
@@ -54,7 +52,6 @@ func TestNewPostgres(t *testing.T) {
 	defer pool.Close()
 }
 
-// TestDatabaseHelpers verifies helper methods in DatabaseTestEnv.
 func TestDatabaseHelpers(t *testing.T) {
 	t.Parallel()
 	env := NewDatabaseTestEnv(t)

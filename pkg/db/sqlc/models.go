@@ -25,7 +25,7 @@ type Transaction struct {
 	BlockNum       int64  `json:"block_num"`
 	TxNum          int64  `json:"tx_num"`
 	TxID           []byte `json:"tx_id"`
-	ValidationCode int64  `json:"validation_code"`
+	ValidationCode int16  `json:"validation_code"`
 }
 
 type TxBlindWrite struct {

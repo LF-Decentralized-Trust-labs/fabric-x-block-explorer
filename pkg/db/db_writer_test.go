@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
 
 func TestWriteProcessedBlock(t *testing.T) {
@@ -29,7 +30,6 @@ func TestWriteProcessedBlock(t *testing.T) {
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
-				BlockNum:       1,
 				TxNum:          0,
 				TxID:           txID,
 				ValidationCode: 0,
@@ -38,12 +38,12 @@ func TestWriteProcessedBlock(t *testing.T) {
 						NsID:      "mycc",
 						NsVersion: 1,
 						ReadWrites: []types.ReadWriteRecord{
-							{Key: "key1", ReadVersion: uint64Ptr(10), Value: []byte("value1")},
+							{Key: "key1", ReadVersion: util.Ptr(uint64(10)), Value: []byte("value1")},
 						},
 						Endorsements: []types.EndorsementRecord{
 							{
 								Endorsement: []byte("endorsement_sig"),
-								MspID:       strPtr("Org1MSP"),
+								MspID:       util.Ptr("Org1MSP"),
 								Identity:    []byte(`{"mspid":"Org1MSP","id_bytes":"cert"}`),
 							},
 						},
@@ -67,7 +67,6 @@ func TestWriteProcessedBlock(t *testing.T) {
 			DataHash:     []byte("datahash"),
 		},
 		Data: parsedData,
-		Txns: 1,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -99,7 +98,6 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
-				BlockNum:       2,
 				TxNum:          0,
 				TxID:           txID,
 				ValidationCode: 0,
@@ -123,7 +121,6 @@ func TestWriteProcessedBlockWithBlindWrites(t *testing.T) {
 			DataHash:     []byte("data2"),
 		},
 		Data: parsedData,
-		Txns: 1,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -150,7 +147,6 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
-				BlockNum:       3,
 				TxNum:          0,
 				TxID:           "0000000000000000000000000000000000000000000000000000000000000001",
 				ValidationCode: 0,
@@ -165,7 +161,6 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 				},
 			},
 			{
-				BlockNum:       3,
 				TxNum:          1,
 				TxID:           "0000000000000000000000000000000000000000000000000000000000000002",
 				ValidationCode: 0,
@@ -189,7 +184,6 @@ func TestWriteProcessedBlockMultipleTransactions(t *testing.T) {
 			DataHash:     []byte("data3"),
 		},
 		Data: parsedData,
-		Txns: 2,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -215,23 +209,32 @@ func TestWriteProcessedBlockNilBlock(t *testing.T) {
 	assert.Contains(t, err.Error(), "nil")
 }
 
-func TestWriteProcessedBlockInvalidData(t *testing.T) {
+func TestWriteProcessedBlockNilBlockInfo(t *testing.T) {
 	t.Parallel()
 	env := NewDatabaseTestEnv(t)
 	ctx := t.Context()
 
-	processedBlock := &types.ProcessedBlock{
-		BlockInfo: &types.BlockInfo{
-			Number: 1,
-		},
-		Data: "invalid_data_type",
-		Txns: 0,
-	}
+	writer := NewBlockWriter(env.Pool)
+	err := writer.WriteProcessedBlock(ctx, &types.ProcessedBlock{
+		BlockInfo: nil,
+		Data:      &types.ParsedBlockData{},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "nil")
+}
+
+func TestWriteProcessedBlockNilData(t *testing.T) {
+	t.Parallel()
+	env := NewDatabaseTestEnv(t)
+	ctx := t.Context()
 
 	writer := NewBlockWriter(env.Pool)
-	err := writer.WriteProcessedBlock(ctx, processedBlock)
+	err := writer.WriteProcessedBlock(ctx, &types.ProcessedBlock{
+		BlockInfo: &types.BlockInfo{Number: 99},
+		Data:      nil,
+	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not *types.ParsedBlockData")
+	assert.Contains(t, err.Error(), "nil")
 }
 
 func TestWriteProcessedBlockWithPolicies(t *testing.T) {
@@ -259,7 +262,6 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 			DataHash:     []byte("data4"),
 		},
 		Data: parsedData,
-		Txns: 0,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -290,7 +292,6 @@ func TestWriteProcessedBlockWithPolicies(t *testing.T) {
 			DataHash:     []byte("data5"),
 		},
 		Data: parsedData2,
-		Txns: 0,
 	}
 
 	err = writer.WriteProcessedBlock(ctx, processedBlock2)
@@ -309,7 +310,6 @@ func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 	parsedData := &types.ParsedBlockData{
 		Transactions: []types.TxRecord{
 			{
-				BlockNum:       6,
 				TxNum:          0,
 				TxID:           "invalid_hex_ZZZ",
 				ValidationCode: 0,
@@ -325,7 +325,6 @@ func TestWriteProcessedBlockRollbackOnError(t *testing.T) {
 			DataHash:     []byte("data6"),
 		},
 		Data: parsedData,
-		Txns: 1,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -373,7 +372,6 @@ func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 			DataHash:     []byte("data7"),
 		},
 		Data: parsedData,
-		Txns: 0,
 	}
 
 	writer := NewBlockWriter(env.Pool)
@@ -382,14 +380,4 @@ func TestWriteProcessedBlockEmptyComponents(t *testing.T) {
 
 	env.AssertBlockExists(t, 7)
 	assert.Equal(t, int64(0), env.GetTransactionCount(t))
-}
-
-// Helper functions
-
-func uint64Ptr(v uint64) *uint64 {
-	return &v
-}
-
-func strPtr(s string) *string {
-	return &s
 }

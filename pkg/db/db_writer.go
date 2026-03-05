@@ -11,7 +11,7 @@ import (
 	"encoding/hex"
 
 	"github.com/cockroachdb/errors"
-	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric-x-committer/utils/logging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -20,7 +20,7 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
 
-var logger = flogging.MustGetLogger("db")
+var logger = logging.New("db")
 
 // BlockWriter writes processed blocks to the database.
 type BlockWriter struct {
@@ -44,37 +44,32 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 	if pb == nil {
 		return errors.New("processed block is nil")
 	}
-
-	parsedData, ok := pb.Data.(*types.ParsedBlockData)
-	if !ok {
-		return errors.New("processed block Data is not *types.ParsedBlockData")
+	if pb.BlockInfo == nil {
+		return errors.New("processed block has nil BlockInfo")
+	}
+	if pb.Data == nil {
+		return errors.New("processed block has nil Data")
 	}
 
-	tx, err := bw.beginTx(ctx)
+	p, err := buildBatchParams(pb.BlockInfo.Number, pb.Data)
 	if err != nil {
 		return err
 	}
 
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback(ctx)
-		}
-	}()
+	tx, rollbackFn, err := bw.beginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackFn()
 
 	q := dbsqlc.New(tx)
 
 	if err = q.InsertBlock(ctx, dbsqlc.InsertBlockParams{
-		BlockNum:     int64(pb.BlockInfo.Number), //nolint:gosec // block numbers fit in int64
-		TxCount:      int32(pb.Txns),             //nolint:gosec // tx count fits in int32
+		BlockNum:     int64(pb.BlockInfo.Number),       //nolint:gosec // block numbers fit in int64
+		TxCount:      int32(len(pb.Data.Transactions)), //nolint:gosec // tx count fits in int32
 		PreviousHash: pb.BlockInfo.PreviousHash,
 		DataHash:     pb.BlockInfo.DataHash,
 	}); err != nil {
-		return err
-	}
-
-	p, err := buildBatchParams(parsedData)
-	if err != nil {
 		return err
 	}
 
@@ -85,22 +80,33 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
-	committed = true
 
-	logger.Debugf("stored block %d with %d transactions", pb.BlockInfo.Number, len(parsedData.Transactions))
+	logger.Debugf("stored block %d with %d transactions", pb.BlockInfo.Number, len(pb.Data.Transactions))
 	return nil
 }
 
-// beginTx starts a new database transaction using the available connection or pool.
-func (bw *BlockWriter) beginTx(ctx context.Context) (pgx.Tx, error) {
+// beginTx starts a new database transaction and returns the transaction and a rollback function.
+func (bw *BlockWriter) beginTx(ctx context.Context) (pgx.Tx, func(), error) {
+	var tx pgx.Tx
+	var err error
 	switch {
 	case bw.conn != nil:
-		return bw.conn.Begin(ctx)
+		tx, err = bw.conn.Begin(ctx)
 	case bw.pool != nil:
-		return bw.pool.Begin(ctx)
+		tx, err = bw.pool.Begin(ctx)
 	default:
-		return nil, errors.New("no pool or conn available in BlockWriter")
+		return nil, func() {}, errors.New("no pool or conn available in BlockWriter")
 	}
+	if err != nil {
+		return nil, func() {}, errors.Wrap(err, "failed to begin database transaction")
+	}
+
+	rollback := func() { //nolint:contextcheck // rollback must work even when ctx is cancelled
+		if rbErr := tx.Rollback(context.Background()); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+			logger.Warn("failed to rollback transaction: ", rbErr)
+		}
+	}
+	return tx, rollback, nil
 }
 
 // batchParams holds all the parameter slices for a block's batch inserts.
@@ -115,12 +121,18 @@ type batchParams struct {
 }
 
 // buildBatchParams flattens all parsed block data into per-table param slices.
-func buildBatchParams(data *types.ParsedBlockData) (*batchParams, error) {
+func buildBatchParams(blockNum uint64, data *types.ParsedBlockData) (*batchParams, error) {
 	p := &batchParams{
-		txParams: make([]dbsqlc.InsertTransactionParams, 0, len(data.Transactions)),
+		txParams:         make([]dbsqlc.InsertTransactionParams, 0, len(data.Transactions)),
+		nsParams:         make([]dbsqlc.InsertTxNamespaceParams, 0, len(data.Transactions)),
+		readOnlyParams:   make([]dbsqlc.InsertReadOnlyParams, 0, len(data.Transactions)),
+		readWriteParams:  make([]dbsqlc.InsertReadWriteParams, 0, len(data.Transactions)),
+		blindWriteParams: make([]dbsqlc.InsertBlindWriteParams, 0, len(data.Transactions)),
+		endorseParams:    make([]dbsqlc.InsertTxEndorsementParams, 0, len(data.Transactions)),
+		policyParams:     make([]dbsqlc.UpsertNamespacePolicyParams, 0, len(data.Policies)),
 	}
 	for _, txRec := range data.Transactions {
-		if err := p.appendTx(txRec); err != nil {
+		if err := p.appendTx(blockNum, txRec); err != nil {
 			return nil, err
 		}
 	}
@@ -137,25 +149,23 @@ func buildBatchParams(data *types.ParsedBlockData) (*batchParams, error) {
 	return p, nil
 }
 
-// appendTx adds a transaction and all its namespace data to the param slices.
-func (p *batchParams) appendTx(txRec types.TxRecord) error {
+func (p *batchParams) appendTx(blockNum uint64, txRec types.TxRecord) error {
 	txIDBytes, err := hex.DecodeString(txRec.TxID)
 	if err != nil {
 		return errors.Wrapf(err, "failed to decode tx_id %s", txRec.TxID)
 	}
 	p.txParams = append(p.txParams, dbsqlc.InsertTransactionParams{
-		BlockNum:       int64(txRec.BlockNum), //nolint:gosec // fits in int64
-		TxNum:          int64(txRec.TxNum),    //nolint:gosec // fits in int64
+		BlockNum:       int64(blockNum),    //nolint:gosec // fits in int64
+		TxNum:          int64(txRec.TxNum), //nolint:gosec // fits in int64
 		TxID:           txIDBytes,
-		ValidationCode: int64(txRec.ValidationCode),
+		ValidationCode: int16(txRec.ValidationCode), //nolint:gosec // max status value is 115, fits in int16
 	})
 	for _, ns := range txRec.Namespaces {
-		p.appendNamespace(txRec.BlockNum, txRec.TxNum, ns)
+		p.appendNamespace(blockNum, txRec.TxNum, ns)
 	}
 	return nil
 }
 
-// appendNamespace adds a single (tx, namespace) pair to the param slices.
 func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespaceRecord) {
 	bn := int64(blockNum) //nolint:gosec // fits in int64
 	tn := int64(txNum)    //nolint:gosec // fits in int64

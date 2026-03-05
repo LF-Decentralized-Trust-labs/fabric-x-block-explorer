@@ -9,7 +9,6 @@ package db
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"testing"
 	"time"
 
@@ -18,6 +17,7 @@ import (
 
 	committerdbtest "github.com/hyperledger/fabric-x-committer/service/vc/dbtest"
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
+	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
@@ -39,16 +39,16 @@ type DatabaseTestEnv struct {
 func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 	t.Helper()
 
-	// The committer dbtest defaults to YugabyteDB; select PostgreSQL instead.
-	t.Setenv("DB_TYPE", committerdbtest.PostgresDBType)
-
 	conn := committerdbtest.PrepareTestEnv(t)
 
 	hostsStr := connection.AddressString(conn.Endpoints...)
-	dsn := fmt.Sprintf(
-		"postgres://%s:%s@%s/%s?sslmode=disable",
-		conn.User, conn.Password, hostsStr, conn.Database,
-	)
+	dsn, err := dbconn.DataSourceName(dbconn.DataSourceNameParams{
+		Username:        conn.User,
+		Password:        conn.Password,
+		EndpointsString: hostsStr,
+		Database:        conn.Database,
+	})
+	require.NoError(t, err, "failed to build DSN")
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)

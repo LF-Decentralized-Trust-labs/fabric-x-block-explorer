@@ -1,7 +1,10 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc lint test test-no-db test-requires-db test-all coverage clean help
+.PHONY: sqlc lint test test-no-db test-requires-db test-all start-db stop-db coverage clean help
+
+DB_CONTAINER_NAME := sc_postgres_unit_tests
+DB_PORT           := 5433
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."
@@ -20,20 +23,34 @@ test-no-db: ## Run tests that do not require a database (parser, types, util)
 		./pkg/types/... \
 		./pkg/util/...
 
-test-requires-db: ## Run DB tests using Docker (requires Docker)
-	@echo "Running tests with Docker..."
-	DB_TYPE=postgres go test -v -count=1 ./pkg/db/...
+start-db: ## Start a local PostgreSQL container for DB tests
+	@docker ps -aq -f name=$(DB_CONTAINER_NAME) | xargs -r docker rm -f
+	docker run --name $(DB_CONTAINER_NAME) \
+		-e POSTGRES_PASSWORD=yugabyte \
+		-e POSTGRES_USER=yugabyte \
+		-p $(DB_PORT):5432 \
+		-d postgres:16.9-alpine3.21
+	@echo "Waiting for Postgres to be ready..."
+	@until docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q; do sleep 1; done
+	@echo "✅ Postgres is ready on localhost:$(DB_PORT)"
 
-test-all: ## Run all tests
+stop-db: ## Stop and remove the local PostgreSQL container
+	docker ps -aq -f name=$(DB_CONTAINER_NAME) | xargs -r docker rm -f
+
+test-requires-db: ## Run DB tests (requires running Postgres: make start-db)
+	@echo "Running tests with database..."
+	DB_DEPLOYMENT=local go test -v -count=1 ./pkg/db/...
+
+test-all: ## Run all tests (requires running Postgres: make start-db)
 	@echo "Running all tests..."
-	go test -v -count=1 ./pkg/...
+	DB_DEPLOYMENT=local go test -v -count=1 ./pkg/...
 
 test: test-all ## Alias for test-all
 
-coverage: ## Generate test coverage report
+coverage: ## Generate test coverage report (requires running Postgres: make start-db)
 	@echo "Generating coverage report..."
 	@mkdir -p coverage
-	go test -coverprofile=coverage/coverage.out ./pkg/...
+	DB_DEPLOYMENT=local go test -coverprofile=coverage/coverage.out ./pkg/...
 	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	go tool cover -func=coverage/coverage.out
 	@echo ""

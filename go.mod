@@ -4,7 +4,6 @@ go 1.24.3
 
 require (
 	github.com/cockroachdb/errors v1.12.0
-	github.com/hyperledger/fabric v2.1.1+incompatible
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7
 	github.com/hyperledger/fabric-x-committer v0.1.7
 	github.com/jackc/pgx/v5 v5.8.0
