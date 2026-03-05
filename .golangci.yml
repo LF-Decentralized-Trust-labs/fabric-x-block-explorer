@@ -132,11 +132,11 @@ linters:
         Copyright IBM Corp. All Rights Reserved.
 
         SPDX-License-Identifier: Apache-2.0
-exclusions:
-  generated: lax
-  warn-unused: true
-  presets:
-    - common-false-positives
+  exclusions:
+    generated: lax
+    warn-unused: true
+    presets:
+      - common-false-positives
 formatters:
   enable:
     - gofumpt
@@ -149,7 +149,8 @@ formatters:
         - github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer
   exclusions:
     generated: lax
-sort-order:
-  - file
-  - severity
-  - linter
+output:
+  sort-order:
+    - file
+    - severity
+    - linter
