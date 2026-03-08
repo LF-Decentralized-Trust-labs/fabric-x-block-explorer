@@ -206,7 +206,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 
 	for _, ro := range ns.ReadsOnly {
 		roRecord := types.ReadOnlyRecord{Key: ro.Key}
-		if ro.Version != nil && *ro.Version > 0 {
+		if ro.Version != nil {
 			roRecord.Version = ro.Version
 		}
 		nsRecord.ReadsOnly = append(nsRecord.ReadsOnly, roRecord)
@@ -217,7 +217,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 			Key:   rw.Key,
 			Value: rw.Value,
 		}
-		if rw.Version != nil && *rw.Version > 0 {
+		if rw.Version != nil {
 			rwRecord.ReadVersion = rw.Version
 		}
 		nsRecord.ReadWrites = append(nsRecord.ReadWrites, rwRecord)
