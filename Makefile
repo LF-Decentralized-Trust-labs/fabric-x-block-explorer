@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc lint test test-no-db test-requires-db test-all start-db stop-db coverage clean help
+.PHONY: sqlc check-sqlc lint test test-no-db test-requires-db test-all start-db ensure-db stop-db coverage clean run run-down help
 
 DB_CONTAINER_NAME  := sc_postgres_unit_tests
 DB_PORT            := 5433
@@ -45,20 +45,35 @@ start-db: ## Start a local PostgreSQL container for DB tests
 	@until docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q; do sleep 1; done
 	@echo "✅ Postgres is ready on localhost:$(DB_PORT)"
 
+ensure-db: ## Ensure the test DB container is running and explorer DB exists; starts/creates if needed
+	@if docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q 2>/dev/null; then \
+		echo "✅ Postgres already running on localhost:$(DB_PORT)"; \
+	else \
+		echo "⚡ Postgres not running — starting it now..."; \
+		$(MAKE) start-db; \
+	fi
+	@if ! docker exec $(DB_CONTAINER_NAME) psql -U yugabyte -lqt 2>/dev/null | cut -d\| -f1 | grep -qw explorer; then \
+		echo "⚡ 'explorer' database missing — creating it..."; \
+		docker exec $(DB_CONTAINER_NAME) psql -U yugabyte -c "CREATE DATABASE explorer;" > /dev/null; \
+		echo "✅ 'explorer' database created"; \
+	else \
+		echo "✅ 'explorer' database exists"; \
+	fi
+
 stop-db: ## Stop and remove the local PostgreSQL container
 	docker ps -aq -f name=$(DB_CONTAINER_NAME) | xargs -r docker rm -f
 
-test-requires-db: ## Run DB tests (requires running Postgres: make start-db)
+test-requires-db: ensure-db ## Run DB tests (auto-starts Postgres if needed)
 	@echo "Running tests with database..."
 	go test -race -v -count=1 ./pkg/db/...
 
-test-all: ## Run all tests (requires running Postgres: make start-db)
+test-all: ensure-db ## Run all tests (auto-starts Postgres if needed)
 	@echo "Running all tests..."
 	go test -race -v -count=1 ./pkg/...
 
 test: test-all ## Alias for test-all
 
-coverage: ## Generate test coverage report (requires running Postgres: make start-db)
+coverage: ensure-db ## Generate test coverage report (auto-starts Postgres if needed)
 	@echo "Generating coverage report..."
 	@mkdir -p coverage
 	go test -race -coverprofile=coverage/coverage.out ./pkg/...
@@ -71,6 +86,12 @@ clean: ## Remove build artifacts and coverage reports
 	@echo "Cleaning build artifacts..."
 	rm -rf coverage/
 	@echo "Clean complete"
+
+run: ## Build and start postgres + explorer (sidecar must be running externally)
+	docker-compose up --build
+
+run-down: ## Stop and remove Docker Compose services and volumes
+	docker-compose down -v
 
 help: ## Display this help message
 	@echo "Fabric X Block Explorer - Makefile targets"

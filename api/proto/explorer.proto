@@ -1,0 +1,118 @@
+// Copyright IBM Corp. All Rights Reserved.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package explorerv1;
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto";
+
+service BlockExplorerService {
+  rpc GetBlockHeight(google.protobuf.Empty)             returns (GetBlockHeightResponse);
+  rpc ListBlocks(ListBlocksRequest)                     returns (ListBlocksResponse);
+  rpc GetBlockDetail(GetBlockDetailRequest)             returns (BlockDetail);
+  rpc GetTransactionDetail(GetTxDetailRequest)          returns (TxDetail);
+  rpc GetNamespacePolicies(GetNamespacePoliciesRequest) returns (GetNamespacePoliciesResponse);
+}
+
+// --- Block Height ---
+
+message GetBlockHeightResponse { int64 height = 1; }
+
+// --- List Blocks ---
+
+message ListBlocksRequest {
+  int64 from   = 1;
+  int64 to     = 2;
+  int32 limit  = 3;
+  int32 offset = 4;
+}
+
+message BlockSummary {
+  int64 block_num     = 1;
+  int32 tx_count      = 2;
+  bytes previous_hash = 3;
+  bytes data_hash     = 4;
+}
+
+message ListBlocksResponse { repeated BlockSummary blocks = 1; }
+
+// --- Block Detail ---
+
+message GetBlockDetailRequest {
+  int64 block_num = 1;
+  int32 tx_limit  = 2;
+  int32 tx_offset = 3;
+}
+
+message BlockDetail {
+  int64             block_num     = 1;
+  int32             tx_count      = 2;
+  bytes             previous_hash = 3;
+  bytes             data_hash     = 4;
+  repeated TxDetail transactions  = 5;
+}
+
+// --- Transaction Detail ---
+
+message GetTxDetailRequest {
+  bytes tx_id = 1;
+}
+
+message TxDetail {
+  int64                   block_num       = 1;
+  int64                   tx_num          = 2;
+  bytes                   tx_id           = 3;
+  int32                   validation_code = 4;
+  repeated BlindWriteRow  blind_writes    = 5;
+  repeated EndorsementRow endorsements    = 6;
+  repeated ReadWriteRow   read_writes     = 7;
+  repeated ReadOnlyRow    reads_only      = 8;
+}
+
+// --- Sub-dataset row types ---
+
+message BlindWriteRow {
+  string ns_id = 1;
+  bytes  key   = 2;
+  bytes  value = 3;
+}
+
+message EndorsementRow {
+  string          ns_id       = 1;
+  bytes           endorsement = 2;
+  optional string msp_id      = 3;
+  bytes           identity    = 4;
+}
+
+message ReadWriteRow {
+  string         ns_id        = 1;
+  bytes          key          = 2;
+  optional int64 read_version = 3;
+  bytes          value        = 4;
+}
+
+message ReadOnlyRow {
+  string         ns_id   = 1;
+  bytes          key     = 2;
+  optional int64 version = 3;
+}
+
+// --- Namespace Policies ---
+
+message GetNamespacePoliciesRequest { string namespace = 1; }
+
+message NamespacePolicyRow {
+  string          namespace      = 1;
+  int64           version        = 2;
+  bytes           policy         = 3;  // raw outer JSON bytes (base64 in JSON transport)
+  repeated string certificates   = 4;  // PEM-encoded X.509 certificates
+  repeated string msp_ids        = 5;  // e.g. ["org", "OrdererMSP"]
+  repeated string endpoints      = 6;  // e.g. ["localhost:7050"]
+  string          hash_algorithm = 7;  // e.g. "SHA256"
+  string          raw_text       = 8;  // printable ASCII excerpt, max 5000 chars
+}
+
+message GetNamespacePoliciesResponse { repeated NamespacePolicyRow policies = 1; }

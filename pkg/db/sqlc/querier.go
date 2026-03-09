@@ -25,6 +25,7 @@ type Querier interface {
 	InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults
 	InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorsementParams) *InsertTxEndorsementBatchResults
 	InsertTxNamespace(ctx context.Context, arg []InsertTxNamespaceParams) *InsertTxNamespaceBatchResults
+	ListBlocks(ctx context.Context, arg ListBlocksParams) ([]Block, error)
 	UpsertNamespacePolicy(ctx context.Context, arg []UpsertNamespacePolicyParams) *UpsertNamespacePolicyBatchResults
 }
 

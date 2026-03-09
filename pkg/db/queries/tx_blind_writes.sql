@@ -7,5 +7,4 @@ ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING;
 SELECT ns_id, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num = $2
-ORDER BY ns_id, key
-LIMIT $3 OFFSET $4;
+ORDER BY ns_id, key;
