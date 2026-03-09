@@ -29,8 +29,8 @@ var jsonOpts = protojson.MarshalOptions{EmitUnpopulated: true}
 //
 //	GET /blocks/height
 //	GET /blocks                      ?from=&to=&limit=&offset=
-//	GET /blocks/{block_num}          ?tx_limit=&tx_offset=&fields=blind_writes,endorsements,...
-//	GET /transactions/{tx_id}        ?fields=blind_writes,endorsements,...    (tx_id is hex)
+//	GET /blocks/{block_num}          ?tx_limit=&tx_offset=
+//	GET /transactions/{tx_id}        (tx_id is hex)
 //	GET /namespaces/{namespace}/policies
 func (s *Service) newRESTRouter() http.Handler {
 	mux := http.NewServeMux()
