@@ -14,14 +14,11 @@ SELECT ns_id, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, key
-LIMIT $3 OFFSET $4
 `
 
 type GetBlindWritesByTxParams struct {
 	BlockNum int64 `json:"block_num"`
 	TxNum    int64 `json:"tx_num"`
-	Limit    int32 `json:"limit"`
-	Offset   int32 `json:"offset"`
 }
 
 type GetBlindWritesByTxRow struct {
@@ -31,12 +28,7 @@ type GetBlindWritesByTxRow struct {
 }
 
 func (q *Queries) GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTxParams) ([]GetBlindWritesByTxRow, error) {
-	rows, err := q.db.Query(ctx, getBlindWritesByTx,
-		arg.BlockNum,
-		arg.TxNum,
-		arg.Limit,
-		arg.Offset,
-	)
+	rows, err := q.db.Query(ctx, getBlindWritesByTx, arg.BlockNum, arg.TxNum)
 	if err != nil {
 		return nil, err
 	}

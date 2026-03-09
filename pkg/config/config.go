@@ -51,12 +51,24 @@ type WorkerConfig struct {
 	WriterCount    int `mapstructure:"writer_count"    yaml:"writer_count"`
 }
 
+// ServerConfig holds the API server configuration.
+type ServerConfig struct {
+	GRPC *connection.ServerConfig `mapstructure:"grpc" yaml:"grpc"`
+	REST RESTConfig               `mapstructure:"rest" yaml:"rest"`
+}
+
+// RESTConfig holds the REST server endpoint.
+type RESTConfig struct {
+	Endpoint connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
+}
+
 // Config is the top-level application configuration.
 type Config struct {
 	DB      DBConfig      `mapstructure:"database" yaml:"database"`
 	Sidecar SidecarConfig `mapstructure:"sidecar"  yaml:"sidecar"`
 	Buffer  BufferConfig  `mapstructure:"buffer"   yaml:"buffer"`
 	Workers WorkerConfig  `mapstructure:"workers"  yaml:"workers"`
+	Server  ServerConfig  `mapstructure:"server"   yaml:"server"`
 }
 
 // LoadFromFile reads a YAML config file at path into Config and applies defaults.
