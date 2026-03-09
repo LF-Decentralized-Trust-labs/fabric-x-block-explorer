@@ -8,3 +8,9 @@ SELECT ns_id, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, key;
+
+-- name: GetReadsOnlyByBlockTxRange :many
+SELECT tx_num, ns_id, key, version
+FROM tx_reads_only
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, key;

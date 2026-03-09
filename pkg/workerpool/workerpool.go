@@ -8,7 +8,9 @@ package workerpool
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
@@ -18,6 +20,7 @@ import (
 	"github.com/hyperledger/fabric-x-committer/utils/logging"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/blockpipeline"
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
@@ -26,10 +29,11 @@ var logger = logging.New("workerpool")
 
 // Config controls goroutine counts and channel buffer sizes.
 type Config struct {
-	ProcessorCount  int
-	WriterCount     int
-	RawChannelSize  int
-	ProcChannelSize int
+	ProcessorCount   int
+	WriterCount      int
+	RawChannelSize   int
+	ProcChannelSize  int
+	MaxReconnectWait time.Duration
 }
 
 // Pool orchestrates the block-processing pipeline:
@@ -45,26 +49,34 @@ type Pool struct {
 }
 
 // New constructs a Pool. pool supplies DB connections; streamer delivers raw blocks.
-func New(cfg Config, pool *pgxpool.Pool, streamer blockpipeline.BlockDeliverer, retry connection.RetryProfile) *Pool {
+func New(
+	cfg Config,
+	pool *pgxpool.Pool,
+	streamer blockpipeline.BlockDeliverer,
+	retry connection.RetryProfile,
+) (*Pool, error) {
 	if pool == nil {
-		panic("workerpool.New: pool must not be nil")
+		return nil, errors.New("workerpool.New: pool must not be nil")
 	}
 	if streamer == nil {
-		panic("workerpool.New: streamer must not be nil")
+		return nil, errors.New("workerpool.New: streamer must not be nil")
 	}
 	if cfg.RawChannelSize <= 0 {
-		cfg.RawChannelSize = 200
+		cfg.RawChannelSize = config.DefaultRawChannelSize
 	}
 	if cfg.ProcChannelSize <= 0 {
-		cfg.ProcChannelSize = 200
+		cfg.ProcChannelSize = config.DefaultProcChannelSize
 	}
 	if cfg.ProcessorCount <= 0 {
-		cfg.ProcessorCount = 4
+		cfg.ProcessorCount = config.DefaultProcessorCount
 	}
 	if cfg.WriterCount <= 0 {
-		cfg.WriterCount = 4
+		cfg.WriterCount = config.DefaultWriterCount
 	}
-	return &Pool{cfg: cfg, pool: pool, streamer: streamer, retry: retry}
+	if cfg.MaxReconnectWait <= 0 {
+		cfg.MaxReconnectWait = config.DefaultMaxReconnectWait
+	}
+	return &Pool{cfg: cfg, pool: pool, streamer: streamer, retry: retry}, nil
 }
 
 // Start launches the pipeline and returns an errgroup that is done when all
@@ -80,7 +92,11 @@ func (p *Pool) Start(ctx context.Context) *errgroup.Group {
 	// Closes rawCh on return so processors drain and exit naturally.
 	g.Go(func() error {
 		defer close(rawCh)
-		blockpipeline.BlockReceiver(gCtx, p.streamer, p.retry.NewBackoff(), rawCh)
+		blockpipeline.BlockReceiver(gCtx, p.streamer, blockpipeline.ReceiverConfig{
+			Backoff:          p.retry.NewBackoff(),
+			Out:              rawCh,
+			MaxReconnectWait: p.cfg.MaxReconnectWait,
+		})
 		return nil
 	})
 

@@ -8,7 +8,6 @@ package api
 
 import (
 	"context"
-	"encoding/hex"
 	"net/http"
 	"strconv"
 
@@ -49,11 +48,23 @@ func (s *Service) handleGetBlockHeight(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleListBlocks(w http.ResponseWriter, r *http.Request) {
-	from, _ := queryInt64(r, "from")
-	to, _ := queryInt64(r, "to")
-	limit, _ := queryInt32(r, "limit")
-	offset, _ := queryInt32(r, "offset")
 	respond(w, r, func(ctx context.Context) (proto.Message, error) {
+		from, err := queryOptionalInt64(r, "from")
+		if err != nil {
+			return nil, err
+		}
+		to, err := queryOptionalInt64(r, "to")
+		if err != nil {
+			return nil, err
+		}
+		limit, err := queryOptionalInt32(r, "limit")
+		if err != nil {
+			return nil, err
+		}
+		offset, err := queryOptionalInt32(r, "offset")
+		if err != nil {
+			return nil, err
+		}
 		return s.ListBlocks(ctx, &explorerv1.ListBlocksRequest{
 			From: from, To: to, Limit: limit, Offset: offset,
 		})
@@ -61,10 +72,16 @@ func (s *Service) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleGetBlockDetail(w http.ResponseWriter, r *http.Request) {
-	blockNum, err := pathInt64(r, "block_num")
-	txLimit, _ := queryInt32(r, "tx_limit")
-	txOffset, _ := queryInt32(r, "tx_offset")
 	respond(w, r, func(ctx context.Context) (proto.Message, error) {
+		blockNum, err := pathInt64(r, "block_num")
+		if err != nil {
+			return nil, err
+		}
+		txLimit, err := queryOptionalInt32(r, "tx_limit")
+		if err != nil {
+			return nil, err
+		}
+		txOffset, err := queryOptionalInt32(r, "tx_offset")
 		if err != nil {
 			return nil, err
 		}
@@ -75,12 +92,8 @@ func (s *Service) handleGetBlockDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleGetTransactionDetail(w http.ResponseWriter, r *http.Request) {
-	txID, err := hex.DecodeString(r.PathValue("tx_id"))
 	respond(w, r, func(ctx context.Context) (proto.Message, error) {
-		if err != nil {
-			return nil, err
-		}
-		return s.GetTransactionDetail(ctx, &explorerv1.GetTxDetailRequest{TxId: txID})
+		return s.GetTransactionDetail(ctx, &explorerv1.GetTxDetailRequest{TxId: r.PathValue("tx_id")})
 	})
 }
 
@@ -98,10 +111,7 @@ func (s *Service) handleGetNamespacePolicies(w http.ResponseWriter, r *http.Requ
 func respond(w http.ResponseWriter, r *http.Request, fn func(context.Context) (proto.Message, error)) {
 	msg, err := fn(r.Context())
 	if err != nil {
-		code := http.StatusInternalServerError
-		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
-			code = http.StatusNotFound
-		}
+		code := statusToHTTPCode(err)
 		http.Error(w, err.Error(), code)
 		return
 	}
@@ -115,14 +125,77 @@ func respond(w http.ResponseWriter, r *http.Request, fn func(context.Context) (p
 }
 
 func pathInt64(r *http.Request, key string) (int64, error) {
-	return strconv.ParseInt(r.PathValue(key), 10, 64)
+	v := r.PathValue(key)
+	parsed, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be an integer: %q", key, v)
+	}
+	if parsed < 0 {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+	}
+	return parsed, nil
 }
 
-func queryInt32(r *http.Request, key string) (int32, error) {
-	v, err := strconv.ParseInt(r.URL.Query().Get(key), 10, 32)
-	return int32(v), err
+func queryOptionalInt32(r *http.Request, key string) (int32, error) {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(v, 10, 32)
+	if err != nil {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be an int32: %q", key, v)
+	}
+	if parsed < 0 {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+	}
+	return int32(parsed), nil
 }
 
-func queryInt64(r *http.Request, key string) (int64, error) {
-	return strconv.ParseInt(r.URL.Query().Get(key), 10, 64)
+func queryOptionalInt64(r *http.Request, key string) (int64, error) {
+	v := r.URL.Query().Get(key)
+	if v == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be an int64: %q", key, v)
+	}
+	if parsed < 0 {
+		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+	}
+	return parsed, nil
+}
+
+func statusToHTTPCode(err error) int {
+	st, ok := status.FromError(err)
+	if !ok {
+		return http.StatusInternalServerError
+	}
+
+	switch st.Code() {
+	case codes.InvalidArgument, codes.FailedPrecondition, codes.OutOfRange:
+		return http.StatusBadRequest
+	case codes.NotFound:
+		return http.StatusNotFound
+	case codes.AlreadyExists, codes.Aborted:
+		return http.StatusConflict
+	case codes.PermissionDenied:
+		return http.StatusForbidden
+	case codes.Unauthenticated:
+		return http.StatusUnauthorized
+	case codes.ResourceExhausted:
+		return http.StatusTooManyRequests
+	case codes.Unimplemented:
+		return http.StatusNotImplemented
+	case codes.Unavailable:
+		return http.StatusServiceUnavailable
+	case codes.DeadlineExceeded:
+		return http.StatusGatewayTimeout
+	case codes.Canceled:
+		return 499
+	case codes.OK:
+		return http.StatusOK
+	default:
+		return http.StatusInternalServerError
+	}
 }

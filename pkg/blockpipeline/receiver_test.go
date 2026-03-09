@@ -8,6 +8,7 @@ package blockpipeline
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -125,7 +126,11 @@ func TestBlockReceiverContextCancellation(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		BlockReceiver(ctx, &mockDeliverer{}, noRetryBackoff(), out)
+		BlockReceiver(ctx, &mockDeliverer{}, ReceiverConfig{
+			Backoff:          noRetryBackoff(),
+			Out:              out,
+			MaxReconnectWait: time.Second,
+		})
 	}()
 
 	<-done // must return cleanly
@@ -146,7 +151,11 @@ func TestBlockReceiverDeliversBlocks(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		BlockReceiver(ctx, deliverer, noRetryBackoff(), out)
+		BlockReceiver(ctx, deliverer, ReceiverConfig{
+			Backoff:          noRetryBackoff(),
+			Out:              out,
+			MaxReconnectWait: time.Second,
+		})
 	}()
 
 	for i := 1; i <= 3; i++ {
@@ -155,4 +164,47 @@ func TestBlockReceiverDeliversBlocks(t *testing.T) {
 	}
 	cancel()
 	<-done // wait for BlockReceiver to exit cleanly
+}
+
+type countingBackOff struct {
+	resetCalls atomic.Int32
+	nextCalls  atomic.Int32
+	nextWait   time.Duration
+}
+
+func (b *countingBackOff) NextBackOff() time.Duration {
+	b.nextCalls.Add(1)
+	return b.nextWait
+}
+
+func (b *countingBackOff) Reset() {
+	b.resetCalls.Add(1)
+}
+
+func TestBlockReceiver_ResetsBackoffAfterForwardingBlocks(t *testing.T) {
+	t.Parallel()
+
+	bo := &countingBackOff{nextWait: time.Nanosecond}
+	deliverer := &mockDeliverer{blocks: []*common.Block{{Header: &common.BlockHeader{Number: 7}}}}
+	out := make(chan *common.Block, 1)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		BlockReceiver(ctx, deliverer, ReceiverConfig{Backoff: bo, Out: out, MaxReconnectWait: time.Nanosecond})
+	}()
+
+	select {
+	case <-out:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for forwarded block")
+	}
+
+	require.Eventually(t, func() bool {
+		return bo.resetCalls.Load() >= 2
+	}, time.Second, 10*time.Millisecond)
+	cancel()
+	<-done
+	require.GreaterOrEqual(t, bo.nextCalls.Load(), int32(1))
 }

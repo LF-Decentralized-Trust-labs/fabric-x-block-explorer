@@ -38,7 +38,8 @@ type SidecarConfig struct {
 	StartBlk   uint64                  `mapstructure:"start_block" yaml:"start_block"`
 	EndBlk     uint64                  `mapstructure:"end_block"   yaml:"end_block"`
 	// Retry controls exponential back-off when the sidecar stream drops and must reconnect.
-	Retry connection.RetryProfile `mapstructure:"retry" yaml:"retry"`
+	Retry            connection.RetryProfile `mapstructure:"retry" yaml:"retry"`
+	MaxReconnectWait time.Duration           `mapstructure:"max_reconnect_wait" yaml:"max_reconnect_wait"`
 }
 
 // BufferConfig controls channel buffer sizes between pipeline stages.
@@ -61,7 +62,9 @@ type ServerConfig struct {
 
 // RESTConfig holds the REST server endpoint.
 type RESTConfig struct {
-	Endpoint connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
+	Endpoint          connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
+	ReadHeaderTimeout time.Duration       `mapstructure:"read_header_timeout" yaml:"read_header_timeout"`
+	DefaultTxLimit    int32               `mapstructure:"default_tx_limit" yaml:"default_tx_limit"`
 }
 
 // Config is the top-level application configuration.
@@ -91,22 +94,25 @@ func LoadFromFile(path string) (*Config, error) {
 // applyDefaults fills in zero-value fields with sensible defaults.
 func applyDefaults(cfg *Config) {
 	if cfg.Buffer.RawChannelSize <= 0 {
-		cfg.Buffer.RawChannelSize = 200
+		cfg.Buffer.RawChannelSize = DefaultRawChannelSize
 	}
 	if cfg.Buffer.ProcChannelSize <= 0 {
-		cfg.Buffer.ProcChannelSize = 200
+		cfg.Buffer.ProcChannelSize = DefaultProcChannelSize
 	}
 	if cfg.Workers.ProcessorCount <= 0 {
-		cfg.Workers.ProcessorCount = 4
+		cfg.Workers.ProcessorCount = DefaultProcessorCount
 	}
 	if cfg.Workers.WriterCount <= 0 {
-		cfg.Workers.WriterCount = 4
+		cfg.Workers.WriterCount = DefaultWriterCount
 	}
 	if cfg.DB.MaxConns <= 0 {
-		cfg.DB.MaxConns = 20
+		cfg.DB.MaxConns = DefaultDBMaxConns
 	}
 	if cfg.Sidecar.EndBlk == 0 {
 		cfg.Sidecar.EndBlk = ^uint64(0) // stream indefinitely
+	}
+	if cfg.Sidecar.MaxReconnectWait <= 0 {
+		cfg.Sidecar.MaxReconnectWait = DefaultMaxReconnectWait
 	}
 	if cfg.Server.GRPC == nil {
 		cfg.Server.GRPC = &connection.ServerConfig{
@@ -118,6 +124,12 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.Server.REST.Endpoint.Port == 0 {
 		cfg.Server.REST.Endpoint.Port = 8080
+	}
+	if cfg.Server.REST.ReadHeaderTimeout <= 0 {
+		cfg.Server.REST.ReadHeaderTimeout = 10 * time.Second
+	}
+	if cfg.Server.REST.DefaultTxLimit <= 0 {
+		cfg.Server.REST.DefaultTxLimit = DefaultTxLimit
 	}
 }
 

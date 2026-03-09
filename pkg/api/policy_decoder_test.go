@@ -12,7 +12,13 @@ import (
 )
 
 func TestDecodePolicy_ValidPolicy(t *testing.T) {
-	inner := "msp-id=org,broadcast,deliver,localhost:7050\nSHA256\n-----BEGIN CERTIFICATE-----\nABC\n-----END CERTIFICATE-----\n"
+	t.Parallel()
+
+	inner := "msp-id=org,broadcast,deliver,localhost:7050\n" +
+		"SHA256\n" +
+		"-----BEGIN CERTIFICATE-----\n" +
+		"ABC\n" +
+		"-----END CERTIFICATE-----\n"
 	encoded := base64.StdEncoding.EncodeToString([]byte(inner))
 	outer := []byte(`{"policy_bytes":"` + encoded + `"}`)
 
@@ -36,18 +42,16 @@ func TestDecodePolicy_ValidPolicy(t *testing.T) {
 	if dec.HashAlgorithm != "SHA256" {
 		t.Fatalf("expected hash algorithm 'SHA256', got %q", dec.HashAlgorithm)
 	}
-	if dec.RawText == "" {
-		t.Fatalf("expected non-empty raw text")
-	}
 }
 
 func TestDecodePolicy_InvalidInput(t *testing.T) {
+	t.Parallel()
+
 	dec := decodePolicy([]byte("not-json"))
 	if len(dec.Certificates) != 0 ||
 		len(dec.MspIDs) != 0 ||
 		len(dec.Endpoints) != 0 ||
-		dec.HashAlgorithm != "" ||
-		dec.RawText != "" {
+		dec.HashAlgorithm != "" {
 		t.Fatalf("expected empty decodedPolicy for invalid input, got %#v", dec)
 	}
 }

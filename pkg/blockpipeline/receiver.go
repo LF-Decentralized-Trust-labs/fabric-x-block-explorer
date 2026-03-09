@@ -21,14 +21,32 @@ type BlockDeliverer interface {
 	StartDeliver(ctx context.Context, out chan<- *common.Block)
 }
 
-// maxReconnectWait caps the reconnect delay when the backoff policy returns backoff.Stop.
-const maxReconnectWait = 30 * time.Second
+// ReceiverConfig controls reconnect behaviour and output buffering for BlockReceiver.
+type ReceiverConfig struct {
+	Backoff          backoff.BackOff
+	Out              chan<- *common.Block
+	MaxReconnectWait time.Duration
+}
 
 // BlockReceiver streams blocks from the sidecar with automatic reconnection.
-// bo controls the reconnect delay; BlockReceiver takes ownership and calls Reset() before the first connect.
-func BlockReceiver(ctx context.Context, streamer BlockDeliverer, bo backoff.BackOff, out chan<- *common.Block) {
+// cfg.Backoff controls the reconnect delay; BlockReceiver takes ownership and calls Reset() before the first connect.
+func BlockReceiver(
+	ctx context.Context,
+	streamer BlockDeliverer,
+	cfg ReceiverConfig,
+) {
 	logger.Info("blockReceiver started")
+	bo := cfg.Backoff
+	if bo == nil {
+		bo = backoff.NewExponentialBackOff()
+	}
 	bo.Reset()
+
+	maxReconnectWait := cfg.MaxReconnectWait
+	if maxReconnectWait <= 0 {
+		maxReconnectWait = 30 * time.Second
+	}
+	out := cfg.Out
 
 	for {
 		select {
@@ -44,7 +62,11 @@ func BlockReceiver(ctx context.Context, streamer BlockDeliverer, bo backoff.Back
 		logger.Info("blockReceiver: starting sidecar stream")
 		streamer.StartDeliver(streamCtx, blockCh)
 
-		if err := consumeBlocks(ctx, blockCh, out); err != nil {
+		forwarded, err := consumeBlocksCount(ctx, blockCh, out)
+		if forwarded > 0 {
+			bo.Reset()
+		}
+		if err != nil {
 			logger.Warnf("blockReceiver stream error: %v", err)
 		}
 		streamCancel() // signal the StartDeliver goroutine to stop
@@ -68,12 +90,22 @@ func BlockReceiver(ctx context.Context, streamer BlockDeliverer, bo backoff.Back
 
 // consumeBlocks forwards blocks from blockCh to out until blockCh closes or ctx is done.
 func consumeBlocks(ctx context.Context, blockCh <-chan *common.Block, out chan<- *common.Block) error {
-	return drainChan(ctx, blockCh, "sidecar block", func(blk *common.Block) error {
+	_, err := consumeBlocksCount(ctx, blockCh, out)
+	return err
+}
+
+// consumeBlocksCount forwards blocks from blockCh to out until blockCh closes or ctx is done.
+// It returns the number of forwarded blocks and the terminal error state.
+func consumeBlocksCount(ctx context.Context, blockCh <-chan *common.Block, out chan<- *common.Block) (int, error) {
+	forwarded := 0
+	err := drainChan(ctx, blockCh, "sidecar block", func(blk *common.Block) error {
 		select {
 		case <-ctx.Done():
 			return nil
 		case out <- blk:
+			forwarded++
 			return nil
 		}
 	})
+	return forwarded, err
 }

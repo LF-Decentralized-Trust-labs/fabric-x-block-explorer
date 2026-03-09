@@ -9,12 +9,16 @@ import (
 )
 
 type Querier interface {
+	GetBlindWritesByBlockTxRange(ctx context.Context, arg GetBlindWritesByBlockTxRangeParams) ([]GetBlindWritesByBlockTxRangeRow, error)
 	GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTxParams) ([]GetBlindWritesByTxRow, error)
 	GetBlock(ctx context.Context, blockNum int64) (Block, error)
 	GetBlockHeight(ctx context.Context) (interface{}, error)
+	GetEndorsementsByBlockTxRange(ctx context.Context, arg GetEndorsementsByBlockTxRangeParams) ([]GetEndorsementsByBlockTxRangeRow, error)
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
+	GetReadWritesByBlockTxRange(ctx context.Context, arg GetReadWritesByBlockTxRangeParams) ([]GetReadWritesByBlockTxRangeRow, error)
 	GetReadWritesByTx(ctx context.Context, arg GetReadWritesByTxParams) ([]GetReadWritesByTxRow, error)
+	GetReadsOnlyByBlockTxRange(ctx context.Context, arg GetReadsOnlyByBlockTxRangeParams) ([]GetReadsOnlyByBlockTxRangeRow, error)
 	GetReadsOnlyByTx(ctx context.Context, arg GetReadsOnlyByTxParams) ([]GetReadsOnlyByTxRow, error)
 	GetValidationCodeByBlock(ctx context.Context, arg GetValidationCodeByBlockParams) ([]Transaction, error)
 	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)

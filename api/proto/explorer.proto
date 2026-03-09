@@ -57,14 +57,22 @@ message BlockDetail {
 
 // --- Transaction Detail ---
 
+// GetTxDetailRequest identifies a transaction by its hex-encoded ID.
+//
+// The hex encoding is URL-safe, so callers can copy the tx_id directly
+// from REST responses into the /transactions/{tx_id} path parameter
+// without additional base64 or URL encoding steps.
 message GetTxDetailRequest {
-  bytes tx_id = 1;
+  string tx_id = 1; // hex-encoded transaction ID
 }
 
+// TxDetail describes a single transaction.  The tx_id field is hex-encoded
+// so that it is safe to embed directly in URLs and is consistent with
+// GetTxDetailRequest.
 message TxDetail {
   int64                   block_num       = 1;
   int64                   tx_num          = 2;
-  bytes                   tx_id           = 3;
+  string                  tx_id           = 3; // hex-encoded transaction ID
   int32                   validation_code = 4;
   repeated BlindWriteRow  blind_writes    = 5;
   repeated EndorsementRow endorsements    = 6;
@@ -107,12 +115,11 @@ message GetNamespacePoliciesRequest { string namespace = 1; }
 message NamespacePolicyRow {
   string          namespace      = 1;
   int64           version        = 2;
-  bytes           policy         = 3;  // raw outer JSON bytes (base64 in JSON transport)
+  string          policy         = 3;  // human-readable policy expression, e.g. "1-of(Org1MSP.peer)" or channel config policy tree
   repeated string certificates   = 4;  // PEM-encoded X.509 certificates
   repeated string msp_ids        = 5;  // e.g. ["org", "OrdererMSP"]
   repeated string endpoints      = 6;  // e.g. ["localhost:7050"]
   string          hash_algorithm = 7;  // e.g. "SHA256"
-  string          raw_text       = 8;  // printable ASCII excerpt, max 5000 chars
 }
 
 message GetNamespacePoliciesResponse { repeated NamespacePolicyRow policies = 1; }
