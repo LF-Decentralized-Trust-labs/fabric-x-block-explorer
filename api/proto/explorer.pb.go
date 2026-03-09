@@ -385,9 +385,14 @@ func (x *BlockDetail) GetTransactions() []*TxDetail {
 	return nil
 }
 
+// GetTxDetailRequest identifies a transaction by its hex-encoded ID.
+//
+// The hex encoding is URL-safe, so callers can copy the tx_id directly
+// from REST responses into the /transactions/{tx_id} path parameter
+// without additional base64 or URL encoding steps.
 type GetTxDetailRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TxId          []byte                 `protobuf:"bytes,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
+	TxId          string                 `protobuf:"bytes,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"` // hex-encoded transaction ID
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -422,18 +427,21 @@ func (*GetTxDetailRequest) Descriptor() ([]byte, []int) {
 	return file_api_proto_explorer_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *GetTxDetailRequest) GetTxId() []byte {
+func (x *GetTxDetailRequest) GetTxId() string {
 	if x != nil {
 		return x.TxId
 	}
-	return nil
+	return ""
 }
 
+// TxDetail describes a single transaction.  The tx_id field is hex-encoded
+// so that it is safe to embed directly in URLs and is consistent with
+// GetTxDetailRequest.
 type TxDetail struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	BlockNum       int64                  `protobuf:"varint,1,opt,name=block_num,json=blockNum,proto3" json:"block_num,omitempty"`
 	TxNum          int64                  `protobuf:"varint,2,opt,name=tx_num,json=txNum,proto3" json:"tx_num,omitempty"`
-	TxId           []byte                 `protobuf:"bytes,3,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
+	TxId           string                 `protobuf:"bytes,3,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"` // hex-encoded transaction ID
 	ValidationCode int32                  `protobuf:"varint,4,opt,name=validation_code,json=validationCode,proto3" json:"validation_code,omitempty"`
 	BlindWrites    []*BlindWriteRow       `protobuf:"bytes,5,rep,name=blind_writes,json=blindWrites,proto3" json:"blind_writes,omitempty"`
 	Endorsements   []*EndorsementRow      `protobuf:"bytes,6,rep,name=endorsements,proto3" json:"endorsements,omitempty"`
@@ -487,11 +495,11 @@ func (x *TxDetail) GetTxNum() int64 {
 	return 0
 }
 
-func (x *TxDetail) GetTxId() []byte {
+func (x *TxDetail) GetTxId() string {
 	if x != nil {
 		return x.TxId
 	}
-	return nil
+	return ""
 }
 
 func (x *TxDetail) GetValidationCode() int32 {
@@ -833,12 +841,11 @@ type NamespacePolicyRow struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Namespace     string                 `protobuf:"bytes,1,opt,name=namespace,proto3" json:"namespace,omitempty"`
 	Version       int64                  `protobuf:"varint,2,opt,name=version,proto3" json:"version,omitempty"`
-	Policy        []byte                 `protobuf:"bytes,3,opt,name=policy,proto3" json:"policy,omitempty"`                                    // raw outer JSON bytes (base64 in JSON transport)
+	Policy        string                 `protobuf:"bytes,3,opt,name=policy,proto3" json:"policy,omitempty"`                                    // human-readable policy expression, e.g. "1-of(Org1MSP.peer)" or channel config policy tree
 	Certificates  []string               `protobuf:"bytes,4,rep,name=certificates,proto3" json:"certificates,omitempty"`                        // PEM-encoded X.509 certificates
 	MspIds        []string               `protobuf:"bytes,5,rep,name=msp_ids,json=mspIds,proto3" json:"msp_ids,omitempty"`                      // e.g. ["org", "OrdererMSP"]
 	Endpoints     []string               `protobuf:"bytes,6,rep,name=endpoints,proto3" json:"endpoints,omitempty"`                              // e.g. ["localhost:7050"]
 	HashAlgorithm string                 `protobuf:"bytes,7,opt,name=hash_algorithm,json=hashAlgorithm,proto3" json:"hash_algorithm,omitempty"` // e.g. "SHA256"
-	RawText       string                 `protobuf:"bytes,8,opt,name=raw_text,json=rawText,proto3" json:"raw_text,omitempty"`                   // printable ASCII excerpt, max 5000 chars
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -887,11 +894,11 @@ func (x *NamespacePolicyRow) GetVersion() int64 {
 	return 0
 }
 
-func (x *NamespacePolicyRow) GetPolicy() []byte {
+func (x *NamespacePolicyRow) GetPolicy() string {
 	if x != nil {
 		return x.Policy
 	}
-	return nil
+	return ""
 }
 
 func (x *NamespacePolicyRow) GetCertificates() []string {
@@ -918,13 +925,6 @@ func (x *NamespacePolicyRow) GetEndpoints() []string {
 func (x *NamespacePolicyRow) GetHashAlgorithm() string {
 	if x != nil {
 		return x.HashAlgorithm
-	}
-	return ""
-}
-
-func (x *NamespacePolicyRow) GetRawText() string {
-	if x != nil {
-		return x.RawText
 	}
 	return ""
 }
@@ -1004,11 +1004,11 @@ const file_api_proto_explorer_proto_rawDesc = "" +
 	"\tdata_hash\x18\x04 \x01(\fR\bdataHash\x128\n" +
 	"\ftransactions\x18\x05 \x03(\v2\x14.explorerv1.TxDetailR\ftransactions\")\n" +
 	"\x12GetTxDetailRequest\x12\x13\n" +
-	"\x05tx_id\x18\x01 \x01(\fR\x04txId\"\xed\x02\n" +
+	"\x05tx_id\x18\x01 \x01(\tR\x04txId\"\xed\x02\n" +
 	"\bTxDetail\x12\x1b\n" +
 	"\tblock_num\x18\x01 \x01(\x03R\bblockNum\x12\x15\n" +
 	"\x06tx_num\x18\x02 \x01(\x03R\x05txNum\x12\x13\n" +
-	"\x05tx_id\x18\x03 \x01(\fR\x04txId\x12'\n" +
+	"\x05tx_id\x18\x03 \x01(\tR\x04txId\x12'\n" +
 	"\x0fvalidation_code\x18\x04 \x01(\x05R\x0evalidationCode\x12<\n" +
 	"\fblind_writes\x18\x05 \x03(\v2\x19.explorerv1.BlindWriteRowR\vblindWrites\x12>\n" +
 	"\fendorsements\x18\x06 \x03(\v2\x1a.explorerv1.EndorsementRowR\fendorsements\x129\n" +
@@ -1039,16 +1039,15 @@ const file_api_proto_explorer_proto_rawDesc = "" +
 	"\n" +
 	"\b_version\";\n" +
 	"\x1bGetNamespacePoliciesRequest\x12\x1c\n" +
-	"\tnamespace\x18\x01 \x01(\tR\tnamespace\"\x81\x02\n" +
+	"\tnamespace\x18\x01 \x01(\tR\tnamespace\"\xe6\x01\n" +
 	"\x12NamespacePolicyRow\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x03R\aversion\x12\x16\n" +
-	"\x06policy\x18\x03 \x01(\fR\x06policy\x12\"\n" +
+	"\x06policy\x18\x03 \x01(\tR\x06policy\x12\"\n" +
 	"\fcertificates\x18\x04 \x03(\tR\fcertificates\x12\x17\n" +
 	"\amsp_ids\x18\x05 \x03(\tR\x06mspIds\x12\x1c\n" +
 	"\tendpoints\x18\x06 \x03(\tR\tendpoints\x12%\n" +
-	"\x0ehash_algorithm\x18\a \x01(\tR\rhashAlgorithm\x12\x19\n" +
-	"\braw_text\x18\b \x01(\tR\arawText\"Z\n" +
+	"\x0ehash_algorithm\x18\a \x01(\tR\rhashAlgorithm\"Z\n" +
 	"\x1cGetNamespacePoliciesResponse\x12:\n" +
 	"\bpolicies\x18\x01 \x03(\v2\x1e.explorerv1.NamespacePolicyRowR\bpolicies2\xb8\x03\n" +
 	"\x14BlockExplorerService\x12L\n" +

@@ -9,6 +9,51 @@ import (
 	"context"
 )
 
+const getBlindWritesByBlockTxRange = `-- name: GetBlindWritesByBlockTxRange :many
+SELECT tx_num, ns_id, key, value
+FROM tx_blind_writes
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, key
+`
+
+type GetBlindWritesByBlockTxRangeParams struct {
+	BlockNum int64 `json:"block_num"`
+	TxNum    int64 `json:"tx_num"`
+	TxNum_2  int64 `json:"tx_num_2"`
+}
+
+type GetBlindWritesByBlockTxRangeRow struct {
+	TxNum int64  `json:"tx_num"`
+	NsID  string `json:"ns_id"`
+	Key   []byte `json:"key"`
+	Value []byte `json:"value"`
+}
+
+func (q *Queries) GetBlindWritesByBlockTxRange(ctx context.Context, arg GetBlindWritesByBlockTxRangeParams) ([]GetBlindWritesByBlockTxRangeRow, error) {
+	rows, err := q.db.Query(ctx, getBlindWritesByBlockTxRange, arg.BlockNum, arg.TxNum, arg.TxNum_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetBlindWritesByBlockTxRangeRow{}
+	for rows.Next() {
+		var i GetBlindWritesByBlockTxRangeRow
+		if err := rows.Scan(
+			&i.TxNum,
+			&i.NsID,
+			&i.Key,
+			&i.Value,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getBlindWritesByTx = `-- name: GetBlindWritesByTx :many
 SELECT ns_id, key, value
 FROM tx_blind_writes

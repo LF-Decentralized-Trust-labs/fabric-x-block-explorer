@@ -29,16 +29,16 @@ type policyOuter struct {
 
 // decodedPolicy holds the structured fields extracted from a raw policy binary.
 type decodedPolicy struct {
-	Certificates  []string
-	MspIDs        []string
-	Endpoints     []string
-	HashAlgorithm string
-	RawText       string
+	PolicyExpression string // e.g. "1-of(Org1MSP.peer)" or a channel config policy tree
+	Certificates     []string
+	MspIDs           []string
+	Endpoints        []string
+	HashAlgorithm    string
 }
 
 // decodePolicy decodes the stored policy bytes (outer JSON → inner binary) and
-// extracts structured fields. It mirrors the logic in the fabric-explorer-ui
-// policyDecoder.ts. Returns an empty decodedPolicy if anything cannot be parsed.
+// extracts structured fields. Returns an empty decodedPolicy if anything cannot
+// be parsed.
 func decodePolicy(policyBytes []byte) decodedPolicy {
 	// 1. Unmarshal the outer JSON wrapper: {"policy_bytes":"<base64>"}.
 	var outer policyOuter
@@ -53,13 +53,38 @@ func decodePolicy(policyBytes []byte) decodedPolicy {
 	}
 
 	text := string(inner)
-	return decodedPolicy{
+	dec := decodedPolicy{
 		Certificates:  extractCerts(text),
 		MspIDs:        extractMspIDs(text),
 		Endpoints:     extractEndpoints(text),
 		HashAlgorithm: extractHashAlgorithm(text),
-		RawText:       extractRawText(inner),
 	}
+	// PolicyExpression is computed last so it can use the already-decoded fields
+	// as a fallback when proto-based decoding produces ambiguous results.
+	dec.PolicyExpression = renderPolicyExpression(inner, dec)
+	return dec
+}
+
+// isValidPolicyExpression returns false for expressions that are likely garbage
+// produced by a false-positive proto decode (e.g. a ConfigEnvelope accidentally
+// interpreted as a SignaturePolicyEnvelope with N=0 at the top level).
+func isValidPolicyExpression(expr string) bool {
+	return expr != "" && !strings.HasPrefix(expr, "0-of(")
+}
+
+// buildDecodedSummary returns a human-readable one-liner from the extracted fields.
+func buildDecodedSummary(dec decodedPolicy) string {
+	var parts []string
+	if len(dec.MspIDs) > 0 {
+		parts = append(parts, "MSPs: "+strings.Join(dec.MspIDs, ", "))
+	}
+	if len(dec.Endpoints) > 0 {
+		parts = append(parts, "Endpoints: "+strings.Join(dec.Endpoints, ", "))
+	}
+	if dec.HashAlgorithm != "" {
+		parts = append(parts, "HashAlgorithm: "+dec.HashAlgorithm)
+	}
+	return strings.Join(parts, " | ")
 }
 
 // extractCerts extracts PEM certificate blocks from the raw text.
@@ -111,16 +136,4 @@ func extractHashAlgorithm(text string) string {
 	default:
 		return ""
 	}
-}
-
-// extractRawText returns printable ASCII characters from inner bytes, up to 5000 chars.
-func extractRawText(inner []byte) string {
-	var sb strings.Builder
-	for i := 0; i < len(inner) && sb.Len() < 5000; i++ {
-		c := inner[i]
-		if (c >= 32 && c <= 126) || c == '\n' || c == '\r' || c == '\t' {
-			sb.WriteByte(c)
-		}
-	}
-	return sb.String()
 }

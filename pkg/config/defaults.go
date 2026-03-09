@@ -8,18 +8,21 @@ package config
 
 import (
 	"math"
+	"time"
 
 	"github.com/spf13/viper"
 )
 
-// Pipeline and DB default values.  These constants are also used by
+// Pipeline and DB default values. These constants are also used by
 // pkg/blockpipeline to validate and fill in a zero-value Config.
 const (
-	DefaultRawChannelSize  = 200
-	DefaultProcChannelSize = 200
-	DefaultProcessorCount  = 4
-	DefaultWriterCount     = 4
-	DefaultDBMaxConns      = 20
+	DefaultRawChannelSize   = 200
+	DefaultProcChannelSize  = 200
+	DefaultProcessorCount   = 4
+	DefaultWriterCount      = 4
+	DefaultDBMaxConns       = 20
+	DefaultTxLimit          = 50
+	DefaultMaxReconnectWait = 30 * time.Second
 )
 
 // newViperWithDefaults returns a viper instance pre-loaded with sensible
@@ -32,5 +35,7 @@ func newViperWithDefaults() *viper.Viper {
 	v.SetDefault("workers.writer_count", DefaultWriterCount)
 	v.SetDefault("database.max_conns", DefaultDBMaxConns)
 	v.SetDefault("sidecar.end_block", uint64(math.MaxUint64)) // stream indefinitely
+	v.SetDefault("sidecar.max_reconnect_wait", DefaultMaxReconnectWait)
+	v.SetDefault("server.rest.default_tx_limit", DefaultTxLimit)
 	return v
 }

@@ -49,6 +49,9 @@ func StartExplorerCMD(use string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := cfg.Validate(); err != nil {
+				return err
+			}
 			cmd.SilenceUsage = true
 			cmd.Printf("Starting %s\n", explorerName)
 			defer cmd.Printf("%s ended\n", explorerName)

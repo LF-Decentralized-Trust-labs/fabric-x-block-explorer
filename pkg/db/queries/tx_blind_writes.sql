@@ -8,3 +8,9 @@ SELECT ns_id, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, key;
+
+-- name: GetBlindWritesByBlockTxRange :many
+SELECT tx_num, ns_id, key, value
+FROM tx_blind_writes
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, key;

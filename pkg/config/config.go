@@ -36,7 +36,8 @@ type SidecarConfig struct {
 	StartBlk   uint64                  `mapstructure:"start_block" yaml:"start_block"`
 	EndBlk     uint64                  `mapstructure:"end_block"   yaml:"end_block"`
 	// Retry controls exponential back-off when the sidecar stream drops and must reconnect.
-	Retry connection.RetryProfile `mapstructure:"retry" yaml:"retry"`
+	Retry            connection.RetryProfile `mapstructure:"retry" yaml:"retry"`
+	MaxReconnectWait time.Duration           `mapstructure:"max_reconnect_wait" yaml:"max_reconnect_wait"`
 }
 
 // BufferConfig controls channel buffer sizes between pipeline stages.
@@ -59,7 +60,9 @@ type ServerConfig struct {
 
 // RESTConfig holds the REST server endpoint.
 type RESTConfig struct {
-	Endpoint connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
+	Endpoint          connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
+	ReadHeaderTimeout time.Duration       `mapstructure:"read_header_timeout" yaml:"read_header_timeout"`
+	DefaultTxLimit    int32               `mapstructure:"default_tx_limit" yaml:"default_tx_limit"`
 }
 
 // Config is the top-level application configuration.

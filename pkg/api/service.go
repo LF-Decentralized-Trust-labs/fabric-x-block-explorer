@@ -8,8 +8,8 @@ package api
 
 import (
 	"context"
+	"net"
 	"net/http"
-	"time"
 
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"
@@ -84,7 +84,6 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 
 	s.q = dbsqlc.New(pool)
-	s.ready.SignalReady()
 
 	streamer, err := sidecarstream.NewStreamer(s.cfg.Sidecar)
 	if err != nil {
@@ -92,22 +91,33 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 	defer streamer.Close()
 
-	wp := workerpool.New(workerpool.Config{
-		ProcessorCount:  s.cfg.Workers.ProcessorCount,
-		WriterCount:     s.cfg.Workers.WriterCount,
-		RawChannelSize:  s.cfg.Buffer.RawChannelSize,
-		ProcChannelSize: s.cfg.Buffer.ProcChannelSize,
+	wp, err := workerpool.New(workerpool.Config{
+		ProcessorCount:   s.cfg.Workers.ProcessorCount,
+		WriterCount:      s.cfg.Workers.WriterCount,
+		RawChannelSize:   s.cfg.Buffer.RawChannelSize,
+		ProcChannelSize:  s.cfg.Buffer.ProcChannelSize,
+		MaxReconnectWait: s.cfg.Sidecar.MaxReconnectWait,
 	}, pool, streamer, s.cfg.Sidecar.Retry)
+	if err != nil {
+		return err
+	}
 
 	restSrv := &http.Server{
 		Addr:              s.cfg.Server.REST.Endpoint.Address(),
 		Handler:           s.newRESTRouter(),
-		ReadHeaderTimeout: 10 * time.Second,
+		ReadHeaderTimeout: s.cfg.Server.REST.ReadHeaderTimeout,
 	}
+	restLis, err := net.Listen("tcp", restSrv.Addr)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = restLis.Close()
+	}()
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		if err := restSrv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		if err := restSrv.Serve(restLis); !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
 		return nil
@@ -115,6 +125,8 @@ func (s *Service) Run(ctx context.Context) error {
 	g.Go(func() error {
 		return wp.Start(gCtx).Wait()
 	})
+
+	s.ready.SignalReady()
 
 	<-gCtx.Done()
 	_ = restSrv.Shutdown(context.Background()) //nolint:contextcheck

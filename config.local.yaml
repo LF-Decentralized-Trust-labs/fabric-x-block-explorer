@@ -16,6 +16,7 @@ sidecar:
       mode: none
   channel_id: mychannel
   start_block: 0
+  max_reconnect_wait: 30s
   retry:
     max_attempts: 0
     initial_interval: 1s
@@ -39,3 +40,5 @@ server:
     endpoint:
       host: 127.0.0.1
       port: 8080
+    read_header_timeout: 10s
+    default_tx_limit: 50
