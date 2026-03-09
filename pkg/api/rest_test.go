@@ -13,12 +13,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
 )
 
 func TestRespond_MapsGRPCStatusCodesToHTTP(t *testing.T) {
