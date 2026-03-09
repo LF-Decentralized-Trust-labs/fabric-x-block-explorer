@@ -11,6 +11,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/hyperledger/fabric-x-committer/utils/connection"
 )
 
 func TestDatabaseTestEnv(t *testing.T) {
@@ -40,11 +42,10 @@ func TestNewPostgres(t *testing.T) {
 	c := env.Pool.Config().ConnConfig
 
 	cfg := Config{
-		Host:     c.Host,
-		Port:     int(c.Port),
-		User:     c.User,
-		Password: c.Password,
-		DBName:   c.Database,
+		Endpoints: []*connection.Endpoint{{Host: c.Host, Port: int(c.Port)}},
+		User:      c.User,
+		Password:  c.Password,
+		DBName:    c.Database,
 	}
 
 	pool, err := NewPostgres(t.Context(), cfg)

@@ -1,7 +1,7 @@
 -- name: InsertTransaction :batchexec
 INSERT INTO transactions (block_num, tx_num, tx_id, validation_code)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (block_num, tx_num) DO UPDATE SET tx_id = EXCLUDED.tx_id;
+ON CONFLICT (block_num, tx_num) DO NOTHING;
 
 -- name: GetValidationCodeByBlock :many
 SELECT block_num, tx_num, tx_id, validation_code
@@ -18,4 +18,4 @@ WHERE tx_id = $1;
 -- name: InsertTxNamespace :batchexec
 INSERT INTO tx_namespaces (block_num, tx_num, ns_id, ns_version)
 VALUES ($1, $2, $3, $4)
-ON CONFLICT (block_num, tx_num, ns_id) DO UPDATE SET ns_version = EXCLUDED.ns_version;
+ON CONFLICT (block_num, tx_num, ns_id) DO NOTHING;

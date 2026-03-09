@@ -9,11 +9,13 @@ package db
 import (
 	"context"
 	"encoding/hex"
+	"time"
 
 	"github.com/cockroachdb/errors"
-	"github.com/hyperledger/fabric-x-committer/utils/logging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/hyperledger/fabric-x-committer/utils/logging"
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
@@ -22,20 +24,28 @@ import (
 
 var logger = logging.New("db")
 
-// BlockWriter writes processed blocks to the database.
+// BlockWriter writes a parsed block to PostgreSQL in a single database transaction using batch inserts.
 type BlockWriter struct {
 	pool *pgxpool.Pool
 	conn *pgxpool.Conn
 }
 
-// NewBlockWriter creates a BlockWriter backed by a connection pool.
+// NewBlockWriter returns a BlockWriter that borrows a connection from pool per write.
+// Prefer over NewBlockWriterFromConn unless connection pinning is required.
 func NewBlockWriter(pool *pgxpool.Pool) *BlockWriter {
 	return &BlockWriter{pool: pool}
 }
 
-// NewBlockWriterFromConn creates a BlockWriter backed by a single connection.
+// NewBlockWriterFromConn returns a BlockWriter pinned to conn. Call Close to return it to the pool.
 func NewBlockWriterFromConn(conn *pgxpool.Conn) *BlockWriter {
 	return &BlockWriter{conn: conn}
+}
+
+// Close returns the pinned connection to the pool. No-op for pool-backed writers.
+func (bw *BlockWriter) Close() {
+	if bw.conn != nil {
+		bw.conn.Release()
+	}
 }
 
 // WriteProcessedBlock persists a fully parsed block and all its transactions
@@ -64,6 +74,7 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 
 	q := dbsqlc.New(tx)
 
+	// TxCount = len(pb.Data.Transactions); see ParsedBlockData for what is excluded.
 	if err = q.InsertBlock(ctx, dbsqlc.InsertBlockParams{
 		BlockNum:     int64(pb.BlockInfo.Number),       //nolint:gosec // block numbers fit in int64
 		TxCount:      int32(len(pb.Data.Transactions)), //nolint:gosec // tx count fits in int32
@@ -85,7 +96,6 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 	return nil
 }
 
-// beginTx starts a new database transaction and returns the transaction and a rollback function.
 func (bw *BlockWriter) beginTx(ctx context.Context) (pgx.Tx, func(), error) {
 	var tx pgx.Tx
 	var err error
@@ -101,8 +111,10 @@ func (bw *BlockWriter) beginTx(ctx context.Context) (pgx.Tx, func(), error) {
 		return nil, func() {}, errors.Wrap(err, "failed to begin database transaction")
 	}
 
-	rollback := func() { //nolint:contextcheck // rollback must work even when ctx is cancelled
-		if rbErr := tx.Rollback(context.Background()); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+	rollback := func() { //nolint:contextcheck // rollback must succeed even when the caller's ctx is cancelled
+		rollbackCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if rbErr := tx.Rollback(rollbackCtx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
 			logger.Warn("failed to rollback transaction: ", rbErr)
 		}
 	}
@@ -122,13 +134,14 @@ type batchParams struct {
 
 // buildBatchParams flattens all parsed block data into per-table param slices.
 func buildBatchParams(blockNum uint64, data *types.ParsedBlockData) (*batchParams, error) {
+	nsTxCount := len(data.Transactions)
 	p := &batchParams{
-		txParams:         make([]dbsqlc.InsertTransactionParams, 0, len(data.Transactions)),
-		nsParams:         make([]dbsqlc.InsertTxNamespaceParams, 0, len(data.Transactions)),
-		readOnlyParams:   make([]dbsqlc.InsertReadOnlyParams, 0, len(data.Transactions)),
-		readWriteParams:  make([]dbsqlc.InsertReadWriteParams, 0, len(data.Transactions)),
-		blindWriteParams: make([]dbsqlc.InsertBlindWriteParams, 0, len(data.Transactions)),
-		endorseParams:    make([]dbsqlc.InsertTxEndorsementParams, 0, len(data.Transactions)),
+		txParams:         make([]dbsqlc.InsertTransactionParams, 0, nsTxCount),
+		nsParams:         make([]dbsqlc.InsertTxNamespaceParams, 0, nsTxCount),
+		readOnlyParams:   make([]dbsqlc.InsertReadOnlyParams, 0, nsTxCount),
+		readWriteParams:  make([]dbsqlc.InsertReadWriteParams, 0, nsTxCount),
+		blindWriteParams: make([]dbsqlc.InsertBlindWriteParams, 0, nsTxCount),
+		endorseParams:    make([]dbsqlc.InsertTxEndorsementParams, 0, nsTxCount),
 		policyParams:     make([]dbsqlc.UpsertNamespacePolicyParams, 0, len(data.Policies)),
 	}
 	for _, txRec := range data.Transactions {
@@ -181,7 +194,7 @@ func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespa
 			BlockNum: bn,
 			TxNum:    tn,
 			NsID:     ns.NsID,
-			Key:      []byte(r.Key),
+			Key:      r.Key,
 			Version:  util.PtrToNullableInt64(r.Version),
 		})
 	}
@@ -190,7 +203,7 @@ func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespa
 			BlockNum:    bn,
 			TxNum:       tn,
 			NsID:        ns.NsID,
-			Key:         []byte(rw.Key),
+			Key:         rw.Key,
 			ReadVersion: util.PtrToNullableInt64(rw.ReadVersion),
 			Value:       rw.Value,
 		})
@@ -200,7 +213,7 @@ func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespa
 			BlockNum: bn,
 			TxNum:    tn,
 			NsID:     ns.NsID,
-			Key:      []byte(bw.Key),
+			Key:      bw.Key,
 			Value:    bw.Value,
 		})
 	}
@@ -219,8 +232,8 @@ func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespa
 // flush executes all batch inserts, skipping any empty param slices.
 func (p *batchParams) flush(ctx context.Context, q *dbsqlc.Queries) error {
 	type entry struct {
-		n int
-		f func() error
+		count int
+		fn    func() error
 	}
 	for _, e := range []entry{
 		{len(p.txParams), func() error { return execBatch(q.InsertTransaction(ctx, p.txParams).Exec) }},
@@ -231,23 +244,21 @@ func (p *batchParams) flush(ctx context.Context, q *dbsqlc.Queries) error {
 		{len(p.endorseParams), func() error { return execBatch(q.InsertTxEndorsement(ctx, p.endorseParams).Exec) }},
 		{len(p.policyParams), func() error { return execBatch(q.UpsertNamespacePolicy(ctx, p.policyParams).Exec) }},
 	} {
-		if e.n == 0 {
+		if e.count == 0 {
 			continue
 		}
-		if err := e.f(); err != nil {
+		if err := e.fn(); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// execBatch drains a batchexec result set and returns the first error encountered.
+// execBatch drains a batchexec result set and returns all encountered errors combined.
 func execBatch(exec func(func(int, error))) error {
 	var batchErr error
 	exec(func(_ int, err error) {
-		if err != nil && batchErr == nil {
-			batchErr = err
-		}
+		batchErr = errors.CombineErrors(batchErr, err)
 	})
 	return batchErr
 }
