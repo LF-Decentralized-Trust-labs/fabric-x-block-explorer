@@ -1,0 +1,118 @@
+@startuml data-flow
+!theme plain
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+
+skinparam rectangle {
+  BackgroundColor #FFFFFF
+  BorderColor     #CCD1D9
+  BorderThickness 1.5
+  FontColor       #1B2A4A
+  FontStyle       bold
+  RoundCorner     8
+}
+
+skinparam component {
+  BackgroundColor #FFFFFF
+  BorderColor     #00898A
+  BorderThickness 1.5
+  FontColor       #1E1E2E
+}
+
+skinparam database {
+  BackgroundColor #F3E5F5
+  BorderColor     #7B1FA2
+  BorderThickness 2
+  FontColor       #1B2A4A
+}
+
+skinparam arrow {
+  Color     #00898A
+  Thickness 2
+  FontSize  11
+  FontColor #00898A
+}
+
+skinparam note {
+  BackgroundColor #F4F6F9
+  BorderColor     #CCD1D9
+  FontSize        11
+}
+
+title <size:20><b>Fabric-X Block Explorer — Data Flow</b></size>
+
+' ─────────────────────────────────────────────────────────────
+' EXTERNAL SYSTEMS
+' ─────────────────────────────────────────────────────────────
+rectangle "EXTERNAL SYSTEMS" as EXT #E8F4FD {
+  component "Hyperledger Fabric Sidecar\nStreams blocks from the ledger in real-time" as sidecar
+}
+
+' ─────────────────────────────────────────────────────────────
+' pkg/sidecarstream
+' ─────────────────────────────────────────────────────────────
+rectangle "Sidecar Stream" as PKG_SS #E3F9F1 {
+  component "**Streamer**\nMaintains a persistent connection to the sidecar\nReceives blocks one at a time and forwards them downstream\nAutomatically reconnects on any transient failure" as streamer
+}
+
+' ─────────────────────────────────────────────────────────────
+' pkg/blockpipeline
+' ─────────────────────────────────────────────────────────────
+rectangle "Block Pipeline  —  orchestrated via a shared error group; first fatal error cancels all workers" as PKG_BP #FAFFF8 {
+
+  component "**Receiver**\nDrives the sidecar connection concurrently\nForwards every valid block into the processing pipeline\nSkips empty blocks; triggers reconnect on failure" as receiver
+
+  component "**Processor  (× N parallel workers)**\nParses raw protobuf blocks into structured data\nExtracts transactions, read/write sets, endorsements\nDecodes channel config blocks into namespace policies" as processor
+
+  component "**Writer  (× M parallel workers)**\nPersists each processed block to the database\nWrites all tables atomically in a single transaction\nEnsures no partial or inconsistent state is stored" as writer
+}
+
+' ─────────────────────────────────────────────────────────────
+' PostgreSQL
+' ─────────────────────────────────────────────────────────────
+database "PostgreSQL  :5433\npkg/db/schema.sql  +  pkg/db/sqlc/ (generated)\n\nblocks → transactions → tx_namespaces → tx_reads_only\n                                    → tx_read_writes\n                                    → tx_blind_writes\n                                    → tx_endorsements\nnamespace_policies" as pg
+
+' ─────────────────────────────────────────────────────────────
+' pkg/api
+' ─────────────────────────────────────────────────────────────
+rectangle "API Layer" as PKG_API #FFF8F0 {
+  component "**Service**\nEntry point that wires all components together\nManages lifecycle — starts pipeline and API servers\nShuts everything down cleanly on any fatal error" as svc
+
+  component "**gRPC API**\nExposes all query operations over gRPC\nDecodes stored policy data into human-readable expressions\nServes block, transaction, and namespace queries" as grpc
+
+  component "**REST API**\nExposes the same operations over HTTP\nDelegates all logic to the gRPC handlers\nReturns JSON responses; maps errors to HTTP status codes" as rest
+
+  component "**API Docs**\nServes the OpenAPI specification\nProvides an interactive Swagger UI for browsing and testing the API" as swagger
+}
+
+' ─────────────────────────────────────────────────────────────
+' Clients
+' ─────────────────────────────────────────────────────────────
+actor "gRPC clients\n:7051" as grpcclient
+actor "HTTP clients\n:8080 / browser" as httpclient
+
+' ─────────────────────────────────────────────────────────────
+' Connections
+' ─────────────────────────────────────────────────────────────
+sidecar   -down-> streamer  : common.Block\n(protobuf, streaming)
+
+streamer  -down-> receiver  : <i>*common.Block</i>\nbuffered channel\nsize = raw_channel_size
+
+receiver  -right-> processor : rawCh\nchan *common.Block
+
+processor -down-> writer    : procCh\nchan *ProcessedBlock\nsize = proc_channel_size
+
+writer    -down-> pg         : pgx batch txn
+
+pg        -down-> svc        : pgxpool (read queries, sqlc)
+
+svc       -down-> grpc
+svc       -down-> rest
+svc       -down-> swagger
+
+grpcclient -up-> grpc
+httpclient -up-> rest
+httpclient -up-> swagger
+
+@enduml
