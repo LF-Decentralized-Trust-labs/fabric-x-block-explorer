@@ -63,99 +63,81 @@ func TestRespond_MapsGRPCStatusCodesToHTTP(t *testing.T) {
 	}
 }
 
-func TestHandleGetBlockDetail_InvalidBlockNumReturnsBadRequest(t *testing.T) {
+func TestRESTHandlers(t *testing.T) {
 	t.Parallel()
 
 	svc := &Service{}
-	req := httptest.NewRequest(http.MethodGet, "/blocks/not-a-number", nil)
-	rr := httptest.NewRecorder()
+	router := svc.newRESTRouter()
 
-	svc.newRESTRouter().ServeHTTP(rr, req)
+	t.Run("invalid block_num returns bad request", func(t *testing.T) {
+		t.Parallel()
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/blocks/not-a-number", nil))
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "block_num must be an integer")
+	})
 
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "block_num must be an integer")
+	t.Run("non-hex tx_id returns bad request", func(t *testing.T) {
+		t.Parallel()
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/transactions/not-hex", nil))
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "tx_id must be hex-encoded")
+	})
+
+	t.Run("invalid limit returns bad request", func(t *testing.T) {
+		t.Parallel()
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/blocks?limit=oops", nil))
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "limit must be an int32")
+	})
+
+	t.Run("negative offset returns bad request", func(t *testing.T) {
+		t.Parallel()
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/blocks?offset=-1", nil))
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "offset must be >= 0")
+	})
+
+	t.Run("negative tx_offset returns bad request", func(t *testing.T) {
+		t.Parallel()
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/blocks/1?tx_offset=-1", nil))
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "tx_offset must be >= 0")
+	})
 }
 
-func TestHandleGetTransactionDetail_InvalidHexReturnsBadRequest(t *testing.T) {
+func TestGRPCValidation(t *testing.T) {
 	t.Parallel()
 
 	svc := &Service{}
-	req := httptest.NewRequest(http.MethodGet, "/transactions/not-hex", nil)
-	rr := httptest.NewRecorder()
 
-	svc.newRESTRouter().ServeHTTP(rr, req)
+	t.Run("list blocks rejects to < from", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.ListBlocks(t.Context(), &explorerv1.ListBlocksRequest{From: 5, To: 4})
+		require.Error(t, err)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.Contains(t, err.Error(), "to must be >= from")
+	})
 
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "tx_id must be hex-encoded")
-}
+	t.Run("get transaction rejects empty tx_id", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.GetTransactionDetail(t.Context(), &explorerv1.GetTxDetailRequest{})
+		require.Error(t, err)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.Contains(t, err.Error(), "tx_id is required")
+	})
 
-func TestHandleListBlocks_InvalidLimitReturnsBadRequest(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	req := httptest.NewRequest(http.MethodGet, "/blocks?limit=oops", nil)
-	rr := httptest.NewRecorder()
-
-	svc.newRESTRouter().ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "limit must be an int32")
-}
-
-func TestHandleListBlocks_NegativeOffsetReturnsBadRequest(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	req := httptest.NewRequest(http.MethodGet, "/blocks?offset=-1", nil)
-	rr := httptest.NewRecorder()
-
-	svc.newRESTRouter().ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "offset must be >= 0")
-}
-
-func TestHandleGetBlockDetail_NegativeTxOffsetReturnsBadRequest(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	req := httptest.NewRequest(http.MethodGet, "/blocks/1?tx_offset=-1", nil)
-	rr := httptest.NewRecorder()
-
-	svc.newRESTRouter().ServeHTTP(rr, req)
-
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "tx_offset must be >= 0")
-}
-
-func TestListBlocks_RejectsInvalidRanges(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	_, err := svc.ListBlocks(t.Context(), &explorerv1.ListBlocksRequest{From: 5, To: 4})
-	require.Error(t, err)
-	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.Contains(t, err.Error(), "to must be >= from")
-}
-
-func TestGetTransactionDetail_RejectsEmptyTxID(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	_, err := svc.GetTransactionDetail(t.Context(), &explorerv1.GetTxDetailRequest{})
-	require.Error(t, err)
-	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.Contains(t, err.Error(), "tx_id is required")
-}
-
-func TestGetNamespacePolicies_RejectsEmptyNamespace(t *testing.T) {
-	t.Parallel()
-
-	svc := &Service{}
-	_, err := svc.GetNamespacePolicies(t.Context(), &explorerv1.GetNamespacePoliciesRequest{})
-	require.Error(t, err)
-	require.Equal(t, codes.InvalidArgument, status.Code(err))
-	require.Contains(t, err.Error(), "namespace is required")
+	t.Run("get namespace policies rejects empty namespace", func(t *testing.T) {
+		t.Parallel()
+		_, err := svc.GetNamespacePolicies(t.Context(), &explorerv1.GetNamespacePoliciesRequest{})
+		require.Error(t, err)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.Contains(t, err.Error(), "namespace is required")
+	})
 }
 
 func TestRespond_WritesJSONOnSuccess(t *testing.T) {

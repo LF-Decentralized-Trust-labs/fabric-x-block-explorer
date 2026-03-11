@@ -22,11 +22,11 @@ import (
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
 
 	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/blockpipeline"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db"
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/sidecarstream"
-	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/workerpool"
 )
 
 // Service serves the block explorer gRPC and REST APIs.
@@ -91,16 +91,13 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 	defer streamer.Close()
 
-	wp, err := workerpool.New(workerpool.Config{
-		ProcessorCount:   s.cfg.Workers.ProcessorCount,
-		WriterCount:      s.cfg.Workers.WriterCount,
-		RawChannelSize:   s.cfg.Buffer.RawChannelSize,
-		ProcChannelSize:  s.cfg.Buffer.ProcChannelSize,
-		MaxReconnectWait: s.cfg.Sidecar.MaxReconnectWait,
-	}, pool, streamer, s.cfg.Sidecar.Retry)
-	if err != nil {
-		return err
-	}
+	wp := blockpipeline.New(blockpipeline.Config{
+		Buffer:   s.cfg.Buffer,
+		Workers:  s.cfg.Workers,
+		DB:       pool,
+		Streamer: streamer,
+		Retry:    s.cfg.Sidecar.Retry,
+	})
 
 	restSrv := &http.Server{
 		Addr:              s.cfg.Server.REST.Endpoint.Address(),
@@ -116,19 +113,20 @@ func (s *Service) Run(ctx context.Context) error {
 	}()
 
 	g, gCtx := errgroup.WithContext(ctx)
-	g.Go(func() error {
-		if err := restSrv.Serve(restLis); !errors.Is(err, http.ErrServerClosed) {
-			return err
-		}
-		return nil
-	})
-	g.Go(func() error {
-		return wp.Start(gCtx).Wait()
-	})
+	g.Go(func() error { return s.runRESTServer(restLis, restSrv) })
+	g.Go(func() error { return wp.Start(gCtx) })
 
 	s.ready.SignalReady()
 
 	<-gCtx.Done()
 	_ = restSrv.Shutdown(context.Background()) //nolint:contextcheck
 	return g.Wait()
+}
+
+// runRESTServer serves HTTP until lis is closed or the server shuts down.
+func (*Service) runRESTServer(lis net.Listener, srv *http.Server) error {
+	if err := srv.Serve(lis); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }

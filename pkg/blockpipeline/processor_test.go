@@ -65,7 +65,7 @@ func TestBlockProcessor(t *testing.T) {
 			assert.Equal(t, uint64(1), pb.BlockInfo.Number)
 			assert.NotNil(t, pb.Data)
 		case err := <-s.done:
-			t.Fatalf("unexpected error: %v", err)
+			require.Fail(t, "unexpected processor exit", err)
 		}
 	})
 
@@ -78,7 +78,7 @@ func TestBlockProcessor(t *testing.T) {
 		case pb := <-s.out:
 			assert.Equal(t, uint64(2), pb.BlockInfo.Number)
 		case err := <-s.done:
-			t.Fatalf("unexpected error: %v", err)
+			require.Fail(t, "unexpected processor exit", err)
 		}
 	})
 
