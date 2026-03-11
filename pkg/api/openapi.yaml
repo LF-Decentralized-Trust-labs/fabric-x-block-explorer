@@ -1,0 +1,414 @@
+openapi: "3.0.3"
+info:
+  title: Fabric-X Block Explorer API
+  version: "0.1.0"
+  license:
+    name: Apache-2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://127.0.0.1:8080
+    description: Local development server
+
+tags:
+  - name: Blocks
+    description: Block-level queries
+  - name: Transactions
+    description: Transaction-level queries
+  - name: Namespaces
+    description: Namespace policy queries
+
+paths:
+  /blocks/height:
+    get:
+      summary: Get current block height
+      operationId: getBlockHeight
+      tags: [Blocks]
+      responses:
+        "200":
+          description: Current block height
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetBlockHeightResponse"
+              example:
+                height: "50"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /blocks:
+    get:
+      summary: List block summaries
+      operationId: listBlocks
+      tags: [Blocks]
+      parameters:
+        - name: from
+          in: query
+          description: Start block number (inclusive)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: to
+          in: query
+          description: End block number (inclusive)
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - name: limit
+          in: query
+          description: Maximum number of blocks to return
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+        - name: offset
+          in: query
+          description: Number of blocks to skip
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+      responses:
+        "200":
+          description: List of block summaries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListBlocksResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /blocks/{block_num}:
+    get:
+      summary: Get block detail
+      operationId: getBlockDetail
+      tags: [Blocks]
+      parameters:
+        - name: block_num
+          in: path
+          required: true
+          description: Block number
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+          example: 2
+        - name: tx_limit
+          in: query
+          description: Maximum number of transactions to include
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+        - name: tx_offset
+          in: query
+          description: Number of transactions to skip
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+      responses:
+        "200":
+          description: Block detail including transactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BlockDetail"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /transactions/{tx_id}:
+    get:
+      summary: Get transaction detail
+      operationId: getTransactionDetail
+      tags: [Transactions]
+      parameters:
+        - name: tx_id
+          in: path
+          required: true
+          description: Hex-encoded transaction ID (copy directly from block detail responses)
+          schema:
+            type: string
+          example: "3a4f9c1d..."
+      responses:
+        "200":
+          description: Transaction detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TxDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /namespaces/{namespace}/policies:
+    get:
+      summary: Get namespace policies
+      operationId: getNamespacePolicies
+      tags: [Namespaces]
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          description: Namespace identifier (use `_meta` for channel-level policies)
+          schema:
+            type: string
+          example: "_meta"
+      responses:
+        "200":
+          description: Namespace policy rows
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetNamespacePoliciesResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  schemas:
+    # ---- Block Height ----
+
+    GetBlockHeightResponse:
+      type: object
+      properties:
+        height:
+          type: string
+          description: Current block height (int64 serialised as string by protojson)
+          example: "50"
+
+    # ---- List Blocks ----
+
+    BlockSummary:
+      type: object
+      properties:
+        blockNum:
+          type: string
+          description: Block number (int64 serialised as string)
+          example: "2"
+        txCount:
+          type: integer
+          format: int32
+          example: 1024
+        previousHash:
+          type: string
+          format: byte
+          description: Base64-encoded previous block hash
+          example: "VjHXD80z52vcS6AI..."
+        dataHash:
+          type: string
+          format: byte
+          description: Base64-encoded data hash
+          example: "cD0gm8WHPcFed5I4..."
+
+    ListBlocksResponse:
+      type: object
+      properties:
+        blocks:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockSummary"
+
+    # ---- Block Detail ----
+
+    BlockDetail:
+      type: object
+      properties:
+        blockNum:
+          type: string
+          description: Block number (int64 serialised as string)
+          example: "2"
+        txCount:
+          type: integer
+          format: int32
+          example: 3
+        previousHash:
+          type: string
+          format: byte
+          description: Base64-encoded previous block hash
+        dataHash:
+          type: string
+          format: byte
+          description: Base64-encoded data hash
+        transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/TxDetail"
+
+    # ---- Transaction Detail ----
+
+    TxDetail:
+      type: object
+      properties:
+        blockNum:
+          type: string
+          description: Block number (int64 serialised as string)
+          example: "2"
+        txNum:
+          type: string
+          description: Transaction index within the block (int64 serialised as string)
+          example: "0"
+        txId:
+          type: string
+          description: Hex-encoded transaction ID
+          example: "3a4f9c1d..."
+        validationCode:
+          type: integer
+          format: int32
+          description: Fabric peer validation code (0 = VALID)
+          example: 0
+        blindWrites:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlindWriteRow"
+        endorsements:
+          type: array
+          items:
+            $ref: "#/components/schemas/EndorsementRow"
+        readWrites:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReadWriteRow"
+        readsOnly:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReadOnlyRow"
+
+    BlindWriteRow:
+      type: object
+      properties:
+        nsId:
+          type: string
+          example: "mycc"
+        key:
+          type: string
+          format: byte
+          description: Base64-encoded key
+        value:
+          type: string
+          format: byte
+          description: Base64-encoded value
+
+    EndorsementRow:
+      type: object
+      properties:
+        nsId:
+          type: string
+          example: "mycc"
+        endorsement:
+          type: string
+          format: byte
+          description: Base64-encoded endorsement bytes
+        mspId:
+          type: string
+          nullable: true
+          example: "org"
+        identity:
+          type: string
+          format: byte
+          description: Base64-encoded signer identity bytes
+
+    ReadWriteRow:
+      type: object
+      properties:
+        nsId:
+          type: string
+          example: "mycc"
+        key:
+          type: string
+          format: byte
+          description: Base64-encoded key
+        readVersion:
+          type: string
+          nullable: true
+          description: Read version (int64 serialised as string); absent when not set
+        value:
+          type: string
+          format: byte
+          description: Base64-encoded written value
+
+    ReadOnlyRow:
+      type: object
+      properties:
+        nsId:
+          type: string
+          example: "mycc"
+        key:
+          type: string
+          format: byte
+          description: Base64-encoded key
+        version:
+          type: string
+          nullable: true
+          description: Version (int64 serialised as string); absent when not set
+
+    # ---- Namespace Policies ----
+
+    NamespacePolicyRow:
+      type: object
+      properties:
+        namespace:
+          type: string
+          example: "_meta"
+        version:
+          type: string
+          description: Policy version (int64 serialised as string)
+          example: "0"
+        policy:
+          type: string
+          description: Human-readable policy expression
+          example: "MAJORITY(Admins)"
+        certificates:
+          type: array
+          description: PEM-encoded X.509 certificates associated with the policy
+          items:
+            type: string
+        mspIds:
+          type: array
+          items:
+            type: string
+          example: ["org"]
+        endpoints:
+          type: array
+          items:
+            type: string
+          example: ["localhost:7050"]
+        hashAlgorithm:
+          type: string
+          example: "SHA256"
+
+    GetNamespacePoliciesResponse:
+      type: object
+      properties:
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/NamespacePolicyRow"
+
+  responses:
+    BadRequest:
+      description: Invalid query or path parameter
+      content:
+        text/plain:
+          schema:
+            type: string
+    NotFound:
+      description: Resource not found
+      content:
+        text/plain:
+          schema:
+            type: string
+    InternalError:
+      description: Internal server error
+      content:
+        text/plain:
+          schema:
+            type: string

@@ -37,6 +37,8 @@ func (s *Service) newRESTRouter() http.Handler {
 	mux.HandleFunc("GET /blocks/{block_num}", s.handleGetBlockByNumber)
 	mux.HandleFunc("GET /transactions/{tx_id}", s.handleGetTxByID)
 	mux.HandleFunc("GET /namespaces/{namespace}/policies", s.handleGetNamespacePolicies)
+	mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
+	mux.HandleFunc("GET /docs", handleSwaggerUI)
 	return mux
 }
 
