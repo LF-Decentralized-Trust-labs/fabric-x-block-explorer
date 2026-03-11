@@ -35,22 +35,32 @@ type Pool struct {
 	retry    connection.RetryProfile
 }
 
-// New constructs a Pool. pool supplies DB connections; streamer delivers raw blocks.
-// buffer and workers are expected to already have defaults applied (e.g. via config.LoadFromFile).
-func New(
-	buffer config.BufferConfig,
-	workers config.WorkerConfig,
-	pool *pgxpool.Pool,
-	streamer *sidecarstream.Streamer,
-	retry connection.RetryProfile,
-) *Pool {
-	if pool == nil {
-		panic("blockpipeline.New: pool must not be nil")
+// Config holds all dependencies and tunables for a Pool.
+// DB and Streamer must not be nil; Buffer and Workers are expected to already
+// have defaults applied (e.g. via config.LoadFromFile).
+type Config struct {
+	Buffer   config.BufferConfig
+	Workers  config.WorkerConfig
+	DB       *pgxpool.Pool
+	Streamer *sidecarstream.Streamer
+	Retry    connection.RetryProfile
+}
+
+// New constructs a Pool from cfg.
+func New(cfg Config) *Pool {
+	if cfg.DB == nil {
+		panic("blockpipeline.New: DB pool must not be nil")
 	}
-	if streamer == nil {
+	if cfg.Streamer == nil {
 		panic("blockpipeline.New: streamer must not be nil")
 	}
-	return &Pool{buffer: buffer, workers: workers, pool: pool, streamer: streamer, retry: retry}
+	return &Pool{
+		buffer:   cfg.Buffer,
+		workers:  cfg.Workers,
+		pool:     cfg.DB,
+		streamer: cfg.Streamer,
+		retry:    cfg.Retry,
+	}
 }
 
 // Start launches the pipeline and blocks until all goroutines have exited.
@@ -71,15 +81,13 @@ func (p *Pool) Start(ctx context.Context) error {
 		procWg.Add(1)
 		g.Go(func() error {
 			defer procWg.Done()
-			return p.runProcessor(gCtx, i, rawCh, procCh)
+			return runProcessor(gCtx, i, rawCh, procCh)
 		})
 	}
 
 	// Close procCh once every processor has exited.
 	g.Go(func() error {
-		procWg.Wait()
-		close(procCh)
-		return nil
+		return closeWhenDone(&procWg, procCh)
 	})
 
 	for i := range p.workers.WriterCount {
@@ -114,11 +122,24 @@ func (p *Pool) runReceiver(ctx context.Context, out chan<- *common.Block) error 
 }
 
 // runProcessor parses raw blocks from rawCh and sends them to procCh.
-func (p *Pool) runProcessor(ctx context.Context, i int, rawCh <-chan *common.Block, procCh chan<- *types.ProcessedBlock) error {
+func runProcessor(
+	ctx context.Context,
+	i int,
+	rawCh <-chan *common.Block,
+	procCh chan<- *types.ProcessedBlock,
+) error {
 	logger.Infof("processor[%d] started", i)
 	err := BlockProcessor(ctx, rawCh, procCh)
 	logger.Infof("processor[%d] stopped", i)
 	return err
+}
+
+// closeWhenDone waits for wg to reach zero then closes ch,
+// signalling downstream consumers that no more items will be sent.
+func closeWhenDone(wg *sync.WaitGroup, ch chan<- *types.ProcessedBlock) error {
+	wg.Wait()
+	close(ch)
+	return nil
 }
 
 // runWriter acquires a DB connection and persists processed blocks from procCh.

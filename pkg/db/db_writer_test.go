@@ -40,7 +40,8 @@ func TestNewBlockWriter(t *testing.T) {
 	assert.Nil(t, writer2.pool)
 }
 
-func TestWriteProcessedBlock(t *testing.T) {
+// TestWriteProcessedBlockValidation tests nil/invalid input rejection and rollback behaviour.
+func TestWriteProcessedBlockValidation(t *testing.T) {
 	t.Parallel()
 
 	t.Run("rejects nil inputs", func(t *testing.T) {
@@ -88,6 +89,11 @@ func TestWriteProcessedBlock(t *testing.T) {
 		assert.Contains(t, err.Error(), "failed to decode tx_id")
 		env.AssertBlockNotExists(t, 6)
 	})
+}
+
+// TestWriteProcessedBlockTxStorage tests correct persistence of various transaction types.
+func TestWriteProcessedBlockTxStorage(t *testing.T) {
+	t.Parallel()
 
 	t.Run("read-write endorsement and policy", func(t *testing.T) {
 		t.Parallel()
@@ -185,6 +191,24 @@ func TestWriteProcessedBlock(t *testing.T) {
 		assert.Equal(t, []byte("blindkey"), key)
 	})
 
+	t.Run("empty transactions and policies", func(t *testing.T) {
+		t.Parallel()
+		env := NewDatabaseTestEnv(t)
+		processedBlock := &types.ProcessedBlock{
+			BlockInfo: &types.BlockInfo{
+				Number: 7, PreviousHash: []byte("prev7"), DataHash: []byte("data7"),
+			},
+			Data: &types.ParsedBlockData{
+				Transactions: []types.TxRecord{},
+				Policies:     []types.NamespacePolicyRecord{},
+			},
+		}
+
+		require.NoError(t, NewBlockWriter(env.Pool).WriteProcessedBlock(t.Context(), processedBlock))
+		env.AssertBlockExists(t, 7)
+		assert.Equal(t, int64(0), env.GetTransactionCount(t))
+	})
+
 	t.Run("multiple transactions", func(t *testing.T) {
 		t.Parallel()
 		env := NewDatabaseTestEnv(t)
@@ -197,7 +221,8 @@ func TestWriteProcessedBlock(t *testing.T) {
 			Data: &types.ParsedBlockData{
 				Transactions: []types.TxRecord{
 					{
-						TxNum: 0, TxID: "0000000000000000000000000000000000000000000000000000000000000001",
+						TxNum:          0,
+						TxID:           "0000000000000000000000000000000000000000000000000000000000000001",
 						ValidationCode: 0,
 						Namespaces: []types.TxNamespaceRecord{
 							{NsID: "cc1", NsVersion: 1, BlindWrites: []types.BlindWriteRecord{
@@ -206,7 +231,8 @@ func TestWriteProcessedBlock(t *testing.T) {
 						},
 					},
 					{
-						TxNum: 1, TxID: "0000000000000000000000000000000000000000000000000000000000000002",
+						TxNum:          1,
+						TxID:           "0000000000000000000000000000000000000000000000000000000000000002",
 						ValidationCode: 0,
 						Namespaces: []types.TxNamespaceRecord{
 							{NsID: "cc2", NsVersion: 1, BlindWrites: []types.BlindWriteRecord{
@@ -226,24 +252,11 @@ func TestWriteProcessedBlock(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, int64(2), count)
 	})
+}
 
-	t.Run("empty transactions and policies", func(t *testing.T) {
-		t.Parallel()
-		env := NewDatabaseTestEnv(t)
-		processedBlock := &types.ProcessedBlock{
-			BlockInfo: &types.BlockInfo{
-				Number: 7, PreviousHash: []byte("prev7"), DataHash: []byte("data7"),
-			},
-			Data: &types.ParsedBlockData{
-				Transactions: []types.TxRecord{},
-				Policies:     []types.NamespacePolicyRecord{},
-			},
-		}
-
-		require.NoError(t, NewBlockWriter(env.Pool).WriteProcessedBlock(t.Context(), processedBlock))
-		env.AssertBlockExists(t, 7)
-		assert.Equal(t, int64(0), env.GetTransactionCount(t))
-	})
+// TestWriteProcessedBlockPolicies tests namespace policy upsert behaviour.
+func TestWriteProcessedBlockPolicies(t *testing.T) {
+	t.Parallel()
 
 	t.Run("policy upsert across blocks", func(t *testing.T) {
 		t.Parallel()
@@ -257,7 +270,11 @@ func TestWriteProcessedBlock(t *testing.T) {
 			Data: &types.ParsedBlockData{
 				Transactions: []types.TxRecord{},
 				Policies: []types.NamespacePolicyRecord{
-					{Namespace: "mycc", Version: 1, PolicyJSON: json.RawMessage(`{"policy_bytes":"base64encodedpolicy"}`)},
+					{
+						Namespace:  "mycc",
+						Version:    1,
+						PolicyJSON: json.RawMessage(`{"policy_bytes":"base64encodedpolicy"}`),
+					},
 				},
 			},
 		}))
@@ -283,10 +300,13 @@ func TestWriteProcessedBlock(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, policies, 2)
 	})
+}
 
-	// invalid transaction stored without namespace rows verifies that transactions
-	// with non-COMMITTED validation codes are stored with the correct status and
-	// without namespace data.
+// TestWriteProcessedBlockInvalidTx verifies that transactions with non-COMMITTED
+// validation codes are stored with the correct status and without namespace data.
+func TestWriteProcessedBlockInvalidTx(t *testing.T) {
+	t.Parallel()
+
 	t.Run("invalid transaction stored without namespace rows", func(t *testing.T) {
 		t.Parallel()
 		env := NewDatabaseTestEnv(t)
