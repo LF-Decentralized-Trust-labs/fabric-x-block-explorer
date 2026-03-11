@@ -8,72 +8,60 @@ package blockpipeline
 
 import (
 	"context"
-	"time"
 
-	"github.com/cenkalti/backoff/v4"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
+	"github.com/hyperledger/fabric-x-committer/utils/channel"
+
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/sidecarstream"
 )
 
-// BlockDeliverer is the interface satisfied by *sidecarstream.Streamer.
-// It is defined here to allow test mocks without importing sidecarstream.
-type BlockDeliverer interface {
-	StartDeliver(ctx context.Context, out chan<- *common.Block)
-}
-
-// maxReconnectWait caps the reconnect delay when the backoff policy returns backoff.Stop.
-const maxReconnectWait = 30 * time.Second
-
-// BlockReceiver streams blocks from the sidecar with automatic reconnection.
-// bo controls the reconnect delay; BlockReceiver takes ownership and calls Reset() before the first connect.
-func BlockReceiver(ctx context.Context, streamer BlockDeliverer, bo backoff.BackOff, out chan<- *common.Block) {
+// BlockReceiver runs one streaming session: it concurrently drives Deliver and
+// forwards every block it produces to out via consumeBlocks.
+//
+// It returns nil when Deliver exits cleanly (e.g. EndBlk reached) and a
+// non-nil error on failure or context cancellation.
+// Reconnection on transient errors is the caller's responsibility.
+func BlockReceiver(ctx context.Context, streamer *sidecarstream.Streamer, out chan<- *common.Block) error {
 	logger.Info("blockReceiver started")
-	bo.Reset()
+	blockCh := make(chan *common.Block, max(cap(out), 1))
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info("blockReceiver stopping")
-			return
-		default:
-		}
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		defer close(blockCh)
+		return streamer.Deliver(gCtx, blockCh)
+	})
+	g.Go(func() error {
+		return consumeBlocks(gCtx, blockCh, out)
+	})
 
-		// per-stream context so the StartDeliver goroutine is cancelled on reconnect.
-		streamCtx, streamCancel := context.WithCancel(ctx)
-		blockCh := make(chan *common.Block, max(cap(out), 1))
-		logger.Info("blockReceiver: starting sidecar stream")
-		streamer.StartDeliver(streamCtx, blockCh)
-
-		if err := consumeBlocks(ctx, blockCh, out); err != nil {
-			logger.Warnf("blockReceiver stream error: %v", err)
-		}
-		streamCancel() // signal the StartDeliver goroutine to stop
-
-		wait := bo.NextBackOff()
-		if wait == backoff.Stop {
-			wait = maxReconnectWait
-		}
-		logger.Infof("blockReceiver: reconnecting after %v", wait)
-
-		timer := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			logger.Info("blockReceiver stopping before reconnect")
-			return
-		case <-timer.C:
-		}
+	err := g.Wait()
+	if err != nil && ctx.Err() == nil {
+		logger.Warnf("blockReceiver stopped with error: %v", err)
+	} else {
+		logger.Info("blockReceiver stopping")
 	}
+	return err
 }
 
 // consumeBlocks forwards blocks from blockCh to out until blockCh closes or ctx is done.
+// A closed blockCh is the expected EOF signal from Deliver; it returns ctx.Err() which
+// is nil on a clean close and non-nil when ctx was already cancelled.
 func consumeBlocks(ctx context.Context, blockCh <-chan *common.Block, out chan<- *common.Block) error {
-	return drainChan(ctx, blockCh, "sidecar block", func(blk *common.Block) error {
-		select {
-		case <-ctx.Done():
-			return nil
-		case out <- blk:
-			return nil
+	reader := channel.NewReader(ctx, blockCh)
+	writer := channel.NewWriter(ctx, out)
+	for {
+		blk, ok := reader.Read()
+		if !ok {
+			// blockCh closed (Deliver EOF) or ctx cancelled.
+			return ctx.Err()
 		}
-	})
+		if blk == nil {
+			continue
+		}
+		if !writer.Write(blk) {
+			return ctx.Err()
+		}
+	}
 }

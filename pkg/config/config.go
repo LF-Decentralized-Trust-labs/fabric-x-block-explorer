@@ -79,19 +79,19 @@ func LoadFromFile(path string) (*Config, error) {
 // applyDefaults fills in zero-value fields with sensible defaults.
 func applyDefaults(cfg *Config) {
 	if cfg.Buffer.RawChannelSize <= 0 {
-		cfg.Buffer.RawChannelSize = 200
+		cfg.Buffer.RawChannelSize = DefaultRawChannelSize
 	}
 	if cfg.Buffer.ProcChannelSize <= 0 {
-		cfg.Buffer.ProcChannelSize = 200
+		cfg.Buffer.ProcChannelSize = DefaultProcChannelSize
 	}
 	if cfg.Workers.ProcessorCount <= 0 {
-		cfg.Workers.ProcessorCount = 4
+		cfg.Workers.ProcessorCount = DefaultProcessorCount
 	}
 	if cfg.Workers.WriterCount <= 0 {
-		cfg.Workers.WriterCount = 4
+		cfg.Workers.WriterCount = DefaultWriterCount
 	}
 	if cfg.DB.MaxConns <= 0 {
-		cfg.DB.MaxConns = 20
+		cfg.DB.MaxConns = DefaultDBMaxConns
 	}
 	if cfg.Sidecar.EndBlk == 0 {
 		cfg.Sidecar.EndBlk = ^uint64(0) // stream indefinitely

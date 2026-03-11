@@ -35,16 +35,14 @@ func localSidecarCfg() config.SidecarConfig {
 func TestNewStreamer(t *testing.T) {
 	t.Parallel()
 
-	streamer, err := NewStreamer(localSidecarCfg())
-	require.NoError(t, err)
-	require.NotNil(t, streamer)
-	assert.NotNil(t, streamer.client)
-
-	streamer.Close()
-}
-
-func TestNewStreamerConfiguration(t *testing.T) {
-	t.Parallel()
+	t.Run("creates streamer with valid config", func(t *testing.T) {
+		t.Parallel()
+		streamer, err := NewStreamer(localSidecarCfg())
+		require.NoError(t, err)
+		require.NotNil(t, streamer)
+		assert.NotNil(t, streamer.client)
+		streamer.Close()
+	})
 
 	cases := []struct {
 		name      string
@@ -56,11 +54,9 @@ func TestNewStreamerConfiguration(t *testing.T) {
 		{"specific range", "businesschannel", 100, 200},
 		{"large range", "ledger1", 500, 5000},
 	}
-
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
 			cfg := config.SidecarConfig{
 				Connection: connection.ClientConfig{
 					Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
@@ -72,11 +68,9 @@ func TestNewStreamerConfiguration(t *testing.T) {
 			streamer, err := NewStreamer(cfg)
 			require.NoError(t, err)
 			require.NotNil(t, streamer)
-
 			assert.Equal(t, tc.channelID, streamer.channelID)
 			assert.Equal(t, int64(tc.startBlk), streamer.startBlk) //nolint:gosec
 			assert.Equal(t, tc.endBlk, streamer.endBlk)
-
 			streamer.Close()
 		})
 	}
@@ -85,57 +79,53 @@ func TestNewStreamerConfiguration(t *testing.T) {
 func TestStreamerClose(t *testing.T) {
 	t.Parallel()
 
-	streamer, err := NewStreamer(localSidecarCfg())
-	require.NoError(t, err)
-	require.NotNil(t, streamer)
-
-	// Multiple calls must not panic.
-	assert.NotPanics(t, func() { streamer.Close() })
-	assert.NotPanics(t, func() { streamer.Close() })
-}
-
-func TestStreamerCloseNilClient(t *testing.T) {
-	t.Parallel()
-
-	streamer := &Streamer{client: nil}
-
-	assert.NotPanics(t, func() { streamer.Close() })
-}
-
-func TestStartDeliver(t *testing.T) {
-	t.Parallel()
-
-	streamer, err := NewStreamer(localSidecarCfg())
-	require.NoError(t, err)
-	require.NotNil(t, streamer)
-	defer streamer.Close()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	blockCh := make(chan *common.Block, 10)
-
-	// StartDeliver launches a goroutine; cancel immediately to stop it.
-	assert.NotPanics(t, func() {
-		streamer.StartDeliver(ctx, blockCh)
+	t.Run("multiple calls must not panic", func(t *testing.T) {
+		t.Parallel()
+		streamer, err := NewStreamer(localSidecarCfg())
+		require.NoError(t, err)
+		require.NotNil(t, streamer)
+		assert.NotPanics(t, func() { streamer.Close() })
+		assert.NotPanics(t, func() { streamer.Close() })
 	})
-	cancel()
+
+	t.Run("nil client must not panic", func(t *testing.T) {
+		t.Parallel()
+		streamer := &Streamer{client: nil}
+		assert.NotPanics(t, func() { streamer.Close() })
+	})
 }
 
-func TestStartDeliverMultipleCalls(t *testing.T) {
+func TestDeliver(t *testing.T) {
 	t.Parallel()
 
-	streamer, err := NewStreamer(localSidecarCfg())
-	require.NoError(t, err)
-	require.NotNil(t, streamer)
-	defer streamer.Close()
+	t.Run("does not panic on single call", func(t *testing.T) {
+		t.Parallel()
+		streamer, err := NewStreamer(localSidecarCfg())
+		require.NoError(t, err)
+		require.NotNil(t, streamer)
+		defer streamer.Close()
 
-	ctx, cancel := context.WithCancel(t.Context())
-	defer cancel()
+		ctx, cancel := context.WithCancel(t.Context())
+		// Deliver is blocking; run in a goroutine and cancel to stop it.
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			_ = streamer.Deliver(ctx, make(chan *common.Block, 10))
+		}()
+		cancel()
+		<-done
+	})
 
-	blockCh1 := make(chan *common.Block, 5)
-	blockCh2 := make(chan *common.Block, 5)
+	t.Run("does not panic on multiple concurrent calls", func(t *testing.T) {
+		t.Parallel()
+		streamer, err := NewStreamer(localSidecarCfg())
+		require.NoError(t, err)
+		require.NotNil(t, streamer)
+		defer streamer.Close()
 
-	assert.NotPanics(t, func() {
-		streamer.StartDeliver(ctx, blockCh1)
-		streamer.StartDeliver(ctx, blockCh2)
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go func() { _ = streamer.Deliver(ctx, make(chan *common.Block, 5)) }()
+		go func() { _ = streamer.Deliver(ctx, make(chan *common.Block, 5)) }()
 	})
 }

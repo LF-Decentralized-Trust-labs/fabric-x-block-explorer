@@ -32,8 +32,8 @@ func validCfg() Config {
 			ChannelID: "mychannel",
 		},
 		Workers: WorkerConfig{
-			ProcessorCount: 4,
-			WriterCount:    4,
+			ProcessorCount: DefaultProcessorCount,
+			WriterCount:    DefaultWriterCount,
 		},
 	}
 }
@@ -164,36 +164,35 @@ workers:
 func TestLoadFromFile(t *testing.T) {
 	t.Parallel()
 
-	path := writeTempConfig(t, minimalYAML)
-	cfg, err := LoadFromFile(path)
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
+	t.Run("parses all fields from YAML", func(t *testing.T) {
+		t.Parallel()
+		cfg, err := LoadFromFile(writeTempConfig(t, minimalYAML))
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
 
-	require.Len(t, cfg.DB.Endpoints, 1)
-	assert.Equal(t, "dbhost", cfg.DB.Endpoints[0].Host)
-	assert.Equal(t, 5433, cfg.DB.Endpoints[0].Port)
-	assert.Equal(t, "dbuser", cfg.DB.User)
-	assert.Equal(t, "secret", cfg.DB.Password)
-	assert.Equal(t, "mydb", cfg.DB.DBName)
+		require.Len(t, cfg.DB.Endpoints, 1)
+		assert.Equal(t, "dbhost", cfg.DB.Endpoints[0].Host)
+		assert.Equal(t, 5433, cfg.DB.Endpoints[0].Port)
+		assert.Equal(t, "dbuser", cfg.DB.User)
+		assert.Equal(t, "secret", cfg.DB.Password)
+		assert.Equal(t, "mydb", cfg.DB.DBName)
 
-	require.NotNil(t, cfg.Sidecar.Connection.Endpoint)
-	assert.Equal(t, "sidecarhost", cfg.Sidecar.Connection.Endpoint.Host)
-	assert.Equal(t, 7053, cfg.Sidecar.Connection.Endpoint.Port)
-	assert.Equal(t, "testchannel", cfg.Sidecar.ChannelID)
-	assert.Equal(t, uint64(5), cfg.Sidecar.StartBlk)
-	assert.Equal(t, uint64(100), cfg.Sidecar.EndBlk)
+		require.NotNil(t, cfg.Sidecar.Connection.Endpoint)
+		assert.Equal(t, "sidecarhost", cfg.Sidecar.Connection.Endpoint.Host)
+		assert.Equal(t, 7053, cfg.Sidecar.Connection.Endpoint.Port)
+		assert.Equal(t, "testchannel", cfg.Sidecar.ChannelID)
+		assert.Equal(t, uint64(5), cfg.Sidecar.StartBlk)
+		assert.Equal(t, uint64(100), cfg.Sidecar.EndBlk)
 
-	assert.Equal(t, 300, cfg.Buffer.RawChannelSize)
-	assert.Equal(t, 400, cfg.Buffer.ProcChannelSize)
-	assert.Equal(t, 8, cfg.Workers.ProcessorCount)
-	assert.Equal(t, 6, cfg.Workers.WriterCount)
-}
+		assert.Equal(t, 300, cfg.Buffer.RawChannelSize)
+		assert.Equal(t, 400, cfg.Buffer.ProcChannelSize)
+		assert.Equal(t, 8, cfg.Workers.ProcessorCount)
+		assert.Equal(t, 6, cfg.Workers.WriterCount)
+	})
 
-func TestLoadFromFileDefaults(t *testing.T) {
-	t.Parallel()
-
-	// Minimal YAML — applyDefaults fills in zero-value fields.
-	const sparse = `
+	t.Run("applies defaults for unset fields", func(t *testing.T) {
+		t.Parallel()
+		const sparse = `
 database:
   endpoints:
     - host: localhost
@@ -207,29 +206,26 @@ sidecar:
       port: 7052
   channel_id: ch
 `
-	path := writeTempConfig(t, sparse)
-	cfg, err := LoadFromFile(path)
-	require.NoError(t, err)
+		cfg, err := LoadFromFile(writeTempConfig(t, sparse))
+		require.NoError(t, err)
 
-	assert.Equal(t, 200, cfg.Buffer.RawChannelSize)
-	assert.Equal(t, 200, cfg.Buffer.ProcChannelSize)
-	assert.Equal(t, 4, cfg.Workers.ProcessorCount)
-	assert.Equal(t, 4, cfg.Workers.WriterCount)
-	assert.Equal(t, int32(20), cfg.DB.MaxConns)
-	assert.Equal(t, ^uint64(0), cfg.Sidecar.EndBlk)
-}
+		assert.Equal(t, DefaultRawChannelSize, cfg.Buffer.RawChannelSize)
+		assert.Equal(t, DefaultProcChannelSize, cfg.Buffer.ProcChannelSize)
+		assert.Equal(t, DefaultProcessorCount, cfg.Workers.ProcessorCount)
+		assert.Equal(t, DefaultWriterCount, cfg.Workers.WriterCount)
+		assert.Equal(t, int32(DefaultDBMaxConns), cfg.DB.MaxConns)
+		assert.Equal(t, ^uint64(0), cfg.Sidecar.EndBlk)
+	})
 
-func TestLoadFromFileMissing(t *testing.T) {
-	t.Parallel()
+	t.Run("returns error for missing file", func(t *testing.T) {
+		t.Parallel()
+		_, err := LoadFromFile("/nonexistent/path/config.yaml")
+		assert.Error(t, err)
+	})
 
-	_, err := LoadFromFile("/nonexistent/path/config.yaml")
-	assert.Error(t, err)
-}
-
-func TestLoadFromFileInvalidYAML(t *testing.T) {
-	t.Parallel()
-
-	path := writeTempConfig(t, `invalid: [unclosed`)
-	_, err := LoadFromFile(path)
-	assert.Error(t, err)
+	t.Run("returns error for invalid YAML", func(t *testing.T) {
+		t.Parallel()
+		_, err := LoadFromFile(writeTempConfig(t, `invalid: [unclosed`))
+		assert.Error(t, err)
+	})
 }

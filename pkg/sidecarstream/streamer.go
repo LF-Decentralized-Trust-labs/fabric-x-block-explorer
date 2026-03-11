@@ -48,22 +48,16 @@ func NewStreamer(cfg config.SidecarConfig) (*Streamer, error) {
 	}, nil
 }
 
-// StartDeliver begins streaming blocks to out in a background goroutine.
-// It closes out when the stream ends (either clean finish or error) so that
-// the receiver can detect the EOF and trigger a reconnect.
-func (s *Streamer) StartDeliver(ctx context.Context, out chan<- *common.Block) {
-	logger.Infof("StartDeliver channel=%s start=%d end=%d", s.channelID, s.startBlk, s.endBlk)
-	go func() {
-		defer close(out) // signal EOF so consumeBlocks returns and BlockReceiver can reconnect
-		params := &sidecarclient.DeliverParameters{
-			StartBlkNum: s.startBlk,
-			EndBlkNum:   s.endBlk,
-			OutputBlock: out,
-		}
-		if err := s.client.Deliver(ctx, params); err != nil {
-			logger.Warnf("Deliver returned error: %v", err)
-		}
-	}()
+// Deliver streams blocks to out, blocking until the stream ends or ctx is cancelled.
+// The caller is responsible for closing out after Deliver returns.
+func (s *Streamer) Deliver(ctx context.Context, out chan<- *common.Block) error {
+	logger.Infof("Deliver channel=%s start=%d end=%d", s.channelID, s.startBlk, s.endBlk)
+	params := &sidecarclient.DeliverParameters{
+		StartBlkNum: s.startBlk,
+		EndBlkNum:   s.endBlk,
+		OutputBlock: out,
+	}
+	return s.client.Deliver(ctx, params)
 }
 
 // Close releases the sidecar client connections.
