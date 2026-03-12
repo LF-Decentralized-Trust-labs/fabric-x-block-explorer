@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
+	"github.com/hyperledger/fabric-x-committer/utils/channel"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
@@ -33,20 +34,22 @@ func validBlock(number uint64, txCount int) *common.Block {
 	}
 }
 
-// processorSetup holds the channels and done signal for a running BlockProcessor.
-type processorSetup struct {
+// processorTestEnv holds the channels and done signal for a running blockProcessor.
+type processorTestEnv struct {
 	in   chan *common.Block
 	out  chan *types.ProcessedBlock
 	done chan error
 }
 
-func startBlockProcessor(ctx context.Context) processorSetup {
-	s := processorSetup{
+func startBlockProcessor(ctx context.Context) processorTestEnv {
+	s := processorTestEnv{
 		in:   make(chan *common.Block, 10),
 		out:  make(chan *types.ProcessedBlock, 10),
 		done: make(chan error, 1),
 	}
-	go func() { s.done <- BlockProcessor(ctx, s.in, s.out) }()
+	inReader := channel.NewReader(ctx, s.in)
+	outWriter := channel.NewWriter(ctx, s.out)
+	go func() { s.done <- blockProcessor(ctx, inReader, outWriter) }()
 	return s
 }
 

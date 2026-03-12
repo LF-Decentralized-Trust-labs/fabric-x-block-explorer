@@ -17,13 +17,12 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-// BlockWriter persists processed blocks to the database.
+// blockWriter persists processed blocks to the database.
 // It returns ctx.Err() on clean shutdown and a non-nil error on failure.
-func BlockWriter(ctx context.Context, persister *db.BlockWriter, in <-chan *types.ProcessedBlock) error {
+func blockWriter(ctx context.Context, persister *db.BlockWriter, in channel.Reader[*types.ProcessedBlock]) error {
 	logger.Info("blockWriter started")
-	reader := channel.NewReader(ctx, in)
 	for ctx.Err() == nil {
-		pb, ok := reader.Read()
+		pb, ok := in.Read()
 		if !ok {
 			// in closed: all processors exited cleanly or ctx cancelled.
 			return ctx.Err()

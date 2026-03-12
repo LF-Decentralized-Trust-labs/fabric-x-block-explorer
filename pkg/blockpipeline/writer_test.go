@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/hyperledger/fabric-x-committer/utils/channel"
+
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
@@ -24,19 +26,19 @@ func newPB(num uint64) *types.ProcessedBlock {
 	}
 }
 
-// writerSetup holds the channels and done signal for a running BlockWriter.
-type writerSetup struct {
+// writerTestEnv holds the channels and done signal for a running blockWriter.
+type writerTestEnv struct {
 	in   chan *types.ProcessedBlock
 	done chan error
 }
 
-func startBlockWriter(ctx context.Context) writerSetup {
-	s := writerSetup{
+func startBlockWriter(ctx context.Context) writerTestEnv {
+	s := writerTestEnv{
 		in:   make(chan *types.ProcessedBlock, 10),
 		done: make(chan error, 1),
 	}
 	// db.NewBlockWriter(nil): persister is never called in flow-only tests.
-	go func() { s.done <- BlockWriter(ctx, db.NewBlockWriter(nil), s.in) }()
+	go func() { s.done <- blockWriter(ctx, db.NewBlockWriter(nil), channel.NewReader(ctx, s.in)) }()
 	return s
 }
 
@@ -54,7 +56,7 @@ func TestBlockWriter(t *testing.T) {
 		t.Parallel()
 		in := make(chan *types.ProcessedBlock, 10)
 		close(in)
-		require.NoError(t, BlockWriter(t.Context(), db.NewBlockWriter(nil), in))
+		require.NoError(t, blockWriter(t.Context(), db.NewBlockWriter(nil), channel.NewReader(t.Context(), in)))
 	})
 
 	t.Run("skips nil block", func(t *testing.T) {

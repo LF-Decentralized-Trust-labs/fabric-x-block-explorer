@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
+	"github.com/hyperledger/fabric-x-committer/utils/channel"
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
@@ -110,7 +111,7 @@ func TestDeliver(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			defer close(done)
-			_ = streamer.Deliver(ctx, make(chan *common.Block, 10))
+			_ = streamer.Deliver(ctx, channel.Make[*common.Block](ctx, 10))
 		}()
 		cancel()
 		<-done
@@ -125,7 +126,7 @@ func TestDeliver(t *testing.T) {
 
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
-		go func() { _ = streamer.Deliver(ctx, make(chan *common.Block, 5)) }()
-		go func() { _ = streamer.Deliver(ctx, make(chan *common.Block, 5)) }()
+		go func() { _ = streamer.Deliver(ctx, channel.Make[*common.Block](ctx, 5)) }()
+		go func() { _ = streamer.Deliver(ctx, channel.Make[*common.Block](ctx, 5)) }()
 	})
 }

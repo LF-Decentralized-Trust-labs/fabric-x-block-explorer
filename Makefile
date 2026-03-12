@@ -34,8 +34,7 @@ test-no-db: ## Run tests that do not require a database (parser, types, util, co
 		./pkg/util/... \
 		./pkg/config/... \
 		./pkg/blockpipeline/... \
-		./pkg/sidecarstream/... \
-		./pkg/pipeline/...
+		./pkg/sidecarstream/...
 
 start-db: ## Start a local PostgreSQL container for DB tests
 	@go mod download $(COMMITTER_MODULE)

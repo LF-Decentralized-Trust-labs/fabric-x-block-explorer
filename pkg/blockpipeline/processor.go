@@ -21,18 +21,16 @@ import (
 
 var logger = logging.New("blockpipeline")
 
-// BlockProcessor parses raw blocks and sends them to the output channel.
+// blockProcessor parses raw blocks and sends them to the output channel.
 // It returns ctx.Err() on clean shutdown and a non-nil error on failure.
-func BlockProcessor(
+func blockProcessor(
 	ctx context.Context,
-	in <-chan *common.Block,
-	out chan<- *types.ProcessedBlock,
+	in channel.Reader[*common.Block],
+	out channel.Writer[*types.ProcessedBlock],
 ) error {
 	logger.Info("blockProcessor started")
-	reader := channel.NewReader(ctx, in)
-	writer := channel.NewWriter(ctx, out)
 	for ctx.Err() == nil {
-		blk, ok := reader.Read()
+		blk, ok := in.Read()
 		if !ok {
 			// in closed: upstream receiver exited cleanly or ctx cancelled.
 			return ctx.Err()
@@ -49,9 +47,7 @@ func BlockProcessor(
 			Data:      parsedData,
 			BlockInfo: blockInfo,
 		}
-		if !writer.Write(processed) {
-			return ctx.Err()
-		}
+		out.Write(processed)
 	}
 	logger.Info("blockProcessor stopping")
 	return ctx.Err()

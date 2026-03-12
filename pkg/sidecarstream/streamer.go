@@ -10,9 +10,11 @@ import (
 	"context"
 
 	"github.com/cockroachdb/errors"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-x-committer/service/sidecar/sidecarclient"
+	"github.com/hyperledger/fabric-x-committer/utils/channel"
 	"github.com/hyperledger/fabric-x-committer/utils/logging"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
@@ -49,15 +51,29 @@ func NewStreamer(cfg config.SidecarConfig) (*Streamer, error) {
 }
 
 // Deliver streams blocks to out, blocking until the stream ends or ctx is cancelled.
-// The caller is responsible for closing out after Deliver returns.
-func (s *Streamer) Deliver(ctx context.Context, out chan<- *common.Block) error {
+func (s *Streamer) Deliver(ctx context.Context, out channel.Writer[*common.Block]) error {
 	logger.Infof("Deliver channel=%s start=%d end=%d", s.channelID, s.startBlk, s.endBlk)
-	params := &sidecarclient.DeliverParameters{
-		StartBlkNum: s.startBlk,
-		EndBlkNum:   s.endBlk,
-		OutputBlock: out,
-	}
-	return s.client.Deliver(ctx, params)
+	// sidecarclient requires a raw channel; bridge its output to the context-backed writer.
+	deliverBlockCh := make(chan *common.Block, 1)
+	g, gCtx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		return s.client.Deliver(gCtx, &sidecarclient.DeliverParameters{
+			StartBlkNum: s.startBlk,
+			EndBlkNum:   s.endBlk,
+			OutputBlock: deliverBlockCh,
+		})
+	})
+	g.Go(func() error {
+		reader := channel.NewReader(ctx, deliverBlockCh)
+		for {
+			blk, ok := reader.Read()
+			if !ok {
+				return ctx.Err()
+			}
+			out.Write(blk)
+		}
+	})
+	return g.Wait()
 }
 
 // Close releases the sidecar client connections.

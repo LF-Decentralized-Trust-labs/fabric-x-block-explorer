@@ -7,11 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package config
 
 import (
-	"errors"
-	"fmt"
 	"time"
 
-	"github.com/spf13/viper"
+	"github.com/cockroachdb/errors"
 
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
 	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
@@ -63,7 +61,7 @@ type Config struct {
 
 // LoadFromFile reads a YAML config file at path into Config and applies defaults.
 func LoadFromFile(path string) (*Config, error) {
-	v := viper.New()
+	v := newViperWithDefaults()
 	v.SetConfigFile(path)
 	if err := v.ReadInConfig(); err != nil {
 		return nil, err
@@ -72,30 +70,7 @@ func LoadFromFile(path string) (*Config, error) {
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, err
 	}
-	applyDefaults(cfg)
 	return cfg, nil
-}
-
-// applyDefaults fills in zero-value fields with sensible defaults.
-func applyDefaults(cfg *Config) {
-	if cfg.Buffer.RawChannelSize <= 0 {
-		cfg.Buffer.RawChannelSize = DefaultRawChannelSize
-	}
-	if cfg.Buffer.ProcChannelSize <= 0 {
-		cfg.Buffer.ProcChannelSize = DefaultProcChannelSize
-	}
-	if cfg.Workers.ProcessorCount <= 0 {
-		cfg.Workers.ProcessorCount = DefaultProcessorCount
-	}
-	if cfg.Workers.WriterCount <= 0 {
-		cfg.Workers.WriterCount = DefaultWriterCount
-	}
-	if cfg.DB.MaxConns <= 0 {
-		cfg.DB.MaxConns = DefaultDBMaxConns
-	}
-	if cfg.Sidecar.EndBlk == 0 {
-		cfg.Sidecar.EndBlk = ^uint64(0) // stream indefinitely
-	}
 }
 
 // Validate returns an error if any required field is missing or out of range.
@@ -113,7 +88,7 @@ func (c *Config) Validate() error {
 		return errors.New("writer count must be greater than 0")
 	}
 	if c.DB.MaxConns > 0 && c.Workers.WriterCount > int(c.DB.MaxConns) {
-		return fmt.Errorf("writer_count (%d) must not exceed database max_conns (%d)",
+		return errors.Newf("writer_count (%d) must not exceed database max_conns (%d)",
 			c.Workers.WriterCount, c.DB.MaxConns)
 	}
 	return nil
@@ -156,7 +131,7 @@ func (s *SidecarConfig) validate() error {
 // validatePort returns an error if port is outside the valid TCP range.
 func validatePort(port int, subject string) error {
 	if port <= 0 || port > 65535 {
-		return fmt.Errorf("%s port must be between 1 and 65535", subject)
+		return errors.Newf("%s port must be between 1 and 65535", subject)
 	}
 	return nil
 }
