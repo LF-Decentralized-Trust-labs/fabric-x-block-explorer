@@ -20,9 +20,10 @@ import (
 // renderPolicyExpression tries known Fabric policy encodings and falls back to a
 // one-line summary from already extracted fields.
 func renderPolicyExpression(inner []byte, dec decodedPolicy) string {
-	var spe commonpb.SignaturePolicyEnvelope
-	if err := proto.Unmarshal(inner, &spe); err == nil && spe.Rule != nil && len(spe.Identities) > 0 {
-		if expr := renderSignaturePolicy(&spe); isValidPolicyExpression(expr) {
+	var sigPolicyEnv commonpb.SignaturePolicyEnvelope
+	if err := proto.Unmarshal(inner, &sigPolicyEnv); err == nil &&
+		sigPolicyEnv.Rule != nil && len(sigPolicyEnv.Identities) > 0 {
+		if expr := renderSignaturePolicy(&sigPolicyEnv); isValidPolicyExpression(expr) {
 			return expr
 		}
 	}
@@ -34,9 +35,10 @@ func renderPolicyExpression(inner []byte, dec decodedPolicy) string {
 		return tree
 	}
 
-	var env commonpb.ConfigEnvelope
-	if err := proto.Unmarshal(inner, &env); err == nil && env.Config != nil && env.Config.ChannelGroup != nil {
-		if tree := renderConfigGroupTree("", env.Config.ChannelGroup, 0); tree != "" {
+	var configEnvelope commonpb.ConfigEnvelope
+	if err := proto.Unmarshal(inner, &configEnvelope); err == nil &&
+		configEnvelope.Config != nil && configEnvelope.Config.ChannelGroup != nil {
+		if tree := renderConfigGroupTree("", configEnvelope.Config.ChannelGroup, 0); tree != "" {
 			return tree
 		}
 	}
@@ -45,16 +47,17 @@ func renderPolicyExpression(inner []byte, dec decodedPolicy) string {
 }
 
 func renderConfigTree(inner []byte) string {
-	var cg commonpb.ConfigGroup
-	if err := proto.Unmarshal(inner, &cg); err == nil && (len(cg.Policies) > 0 || len(cg.Groups) > 0) {
-		if tree := renderConfigGroupTree("", &cg, 0); tree != "" {
+	var configGroup commonpb.ConfigGroup
+	if err := proto.Unmarshal(inner, &configGroup); err == nil &&
+		(len(configGroup.Policies) > 0 || len(configGroup.Groups) > 0) {
+		if tree := renderConfigGroupTree("", &configGroup, 0); tree != "" {
 			return tree
 		}
 	}
 
-	var cfg commonpb.Config
-	if err := proto.Unmarshal(inner, &cfg); err == nil && cfg.ChannelGroup != nil {
-		if tree := renderConfigGroupTree("", cfg.ChannelGroup, 0); tree != "" {
+	var channelConfig commonpb.Config
+	if err := proto.Unmarshal(inner, &channelConfig); err == nil && channelConfig.ChannelGroup != nil {
+		if tree := renderConfigGroupTree("", channelConfig.ChannelGroup, 0); tree != "" {
 			return tree
 		}
 	}
@@ -73,13 +76,13 @@ func renderEnvelopeConfigTree(inner []byte) string {
 		return ""
 	}
 
-	var cfgEnv commonpb.ConfigEnvelope
-	if err := proto.Unmarshal(payload.Data, &cfgEnv); err != nil ||
-		cfgEnv.Config == nil || cfgEnv.Config.ChannelGroup == nil {
+	var configEnvelope commonpb.ConfigEnvelope
+	if err := proto.Unmarshal(payload.Data, &configEnvelope); err != nil ||
+		configEnvelope.Config == nil || configEnvelope.Config.ChannelGroup == nil {
 		return ""
 	}
 
-	return renderConfigGroupTree("", cfgEnv.Config.ChannelGroup, 0)
+	return renderConfigGroupTree("", configEnvelope.Config.ChannelGroup, 0)
 }
 
 func renderSignaturePolicy(spe *commonpb.SignaturePolicyEnvelope) string {
@@ -180,14 +183,14 @@ func renderConfigPolicy(cp *commonpb.ConfigPolicy) string {
 
 	switch commonpb.Policy_PolicyType(cp.Policy.Type) {
 	case commonpb.Policy_SIGNATURE:
-		var spe commonpb.SignaturePolicyEnvelope
-		if err := proto.Unmarshal(cp.Policy.Value, &spe); err == nil && spe.Rule != nil {
-			return renderSignaturePolicy(&spe)
+		var sigPolicyEnv commonpb.SignaturePolicyEnvelope
+		if err := proto.Unmarshal(cp.Policy.Value, &sigPolicyEnv); err == nil && sigPolicyEnv.Rule != nil {
+			return renderSignaturePolicy(&sigPolicyEnv)
 		}
 	case commonpb.Policy_IMPLICIT_META:
-		var imp commonpb.ImplicitMetaPolicy
-		if err := proto.Unmarshal(cp.Policy.Value, &imp); err == nil {
-			return fmt.Sprintf("%s(%s)", imp.Rule.String(), imp.SubPolicy)
+		var implicitPolicy commonpb.ImplicitMetaPolicy
+		if err := proto.Unmarshal(cp.Policy.Value, &implicitPolicy); err == nil {
+			return fmt.Sprintf("%s(%s)", implicitPolicy.Rule.String(), implicitPolicy.SubPolicy)
 		}
 	default:
 		return ""

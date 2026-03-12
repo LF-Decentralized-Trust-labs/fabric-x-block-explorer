@@ -53,7 +53,7 @@ func decodePolicy(policyBytes []byte) decodedPolicy {
 	}
 
 	text := string(inner)
-	dec := decodedPolicy{
+	result := decodedPolicy{
 		Certificates:  extractCerts(text),
 		MspIDs:        extractMspIDs(text),
 		Endpoints:     extractEndpoints(text),
@@ -61,8 +61,8 @@ func decodePolicy(policyBytes []byte) decodedPolicy {
 	}
 	// PolicyExpression is computed last so it can use the already-decoded fields
 	// as a fallback when proto-based decoding produces ambiguous results.
-	dec.PolicyExpression = renderPolicyExpression(inner, dec)
-	return dec
+	result.PolicyExpression = renderPolicyExpression(inner, result)
+	return result
 }
 
 // isValidPolicyExpression returns false for expressions that are likely garbage

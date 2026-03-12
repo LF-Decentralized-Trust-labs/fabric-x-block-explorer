@@ -24,13 +24,18 @@ import (
 
 // GetBlockHeight returns the current block height (highest block number in the DB).
 func (s *Service) GetBlockHeight(ctx context.Context, _ *emptypb.Empty) (*explorerv1.GetBlockHeightResponse, error) {
-	h, err := s.q.GetBlockHeight(ctx)
+	heightResult, err := s.q.GetBlockHeight(ctx)
 	if err != nil {
 		return nil, err
 	}
 	var height int64
-	if v, ok := h.(int64); ok {
+	switch v := heightResult.(type) {
+	case int64:
 		height = v
+	case nil:
+		// no blocks yet, height is 0
+	default:
+		return nil, status.Errorf(codes.Internal, "unexpected block height type: %T", v)
 	}
 	return &explorerv1.GetBlockHeightResponse{Height: height}, nil
 }
@@ -47,12 +52,12 @@ func (s *Service) ListBlocks(
 	if toNum == 0 {
 		toNum = math.MaxInt64
 	}
-	lim := req.Limit
-	if lim == 0 {
-		lim = s.defaultTxLimit()
+	limit := req.Limit
+	if limit == 0 {
+		limit = s.defaultTxLimit()
 	}
 	rows, err := s.q.ListBlocks(ctx, dbsqlc.ListBlocksParams{
-		FromNum: req.From, ToNum: toNum, Lim: lim, Off: req.Offset,
+		FromNum: req.From, ToNum: toNum, Lim: limit, Off: req.Offset,
 	})
 	if err != nil {
 		return nil, err
@@ -74,16 +79,16 @@ func (s *Service) GetBlockDetail(
 	if err := validateBlockDetailRequest(req); err != nil {
 		return nil, err
 	}
-	b, err := s.q.GetBlock(ctx, req.BlockNum)
+	blockRow, err := s.q.GetBlock(ctx, req.BlockNum)
 	if err != nil {
 		return nil, notFound(err)
 	}
-	txLim := req.TxLimit
-	if txLim == 0 {
-		txLim = s.defaultTxLimit()
+	txLimit := req.TxLimit
+	if txLimit == 0 {
+		txLimit = s.defaultTxLimit()
 	}
 	txRows, err := s.q.GetValidationCodeByBlock(ctx, dbsqlc.GetValidationCodeByBlockParams{
-		BlockNum: req.BlockNum, Limit: txLim, Offset: req.TxOffset,
+		BlockNum: req.BlockNum, Limit: txLimit, Offset: req.TxOffset,
 	})
 	if err != nil {
 		return nil, err
@@ -93,8 +98,8 @@ func (s *Service) GetBlockDetail(
 		return nil, err
 	}
 	return &explorerv1.BlockDetail{
-		BlockNum: b.BlockNum, TxCount: b.TxCount,
-		PreviousHash: b.PreviousHash, DataHash: b.DataHash,
+		BlockNum: blockRow.BlockNum, TxCount: blockRow.TxCount,
+		PreviousHash: blockRow.PreviousHash, DataHash: blockRow.DataHash,
 		Transactions: txDetails,
 	}, nil
 }
@@ -135,20 +140,20 @@ func (s *Service) GetNamespacePolicies(
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*explorerv1.NamespacePolicyRow, len(rows))
+	policies := make([]*explorerv1.NamespacePolicyRow, len(rows))
 	for i, r := range rows {
-		dec := decodePolicy(r.Policy)
-		out[i] = &explorerv1.NamespacePolicyRow{
+		decodedPol := decodePolicy(r.Policy)
+		policies[i] = &explorerv1.NamespacePolicyRow{
 			Namespace:     r.Namespace,
 			Version:       r.Version,
-			Policy:        dec.PolicyExpression,
-			Certificates:  dec.Certificates,
-			MspIds:        dec.MspIDs,
-			Endpoints:     dec.Endpoints,
-			HashAlgorithm: dec.HashAlgorithm,
+			Policy:        decodedPol.PolicyExpression,
+			Certificates:  decodedPol.Certificates,
+			MspIds:        decodedPol.MspIDs,
+			Endpoints:     decodedPol.Endpoints,
+			HashAlgorithm: decodedPol.HashAlgorithm,
 		}
 	}
-	return &explorerv1.GetNamespacePoliciesResponse{Policies: out}, nil
+	return &explorerv1.GetNamespacePoliciesResponse{Policies: policies}, nil
 }
 
 // --- shared helpers ---
@@ -198,29 +203,29 @@ func (s *Service) loadTxDetail(
 		TxId: hex.EncodeToString(tx.TxID), ValidationCode: int32(tx.ValidationCode),
 	}
 
-	bw, err := s.fetchBlindWrites(ctx, tx.BlockNum, tx.TxNum)
+	blindWrites, err := s.fetchBlindWrites(ctx, tx.BlockNum, tx.TxNum)
 	if err != nil {
 		return nil, err
 	}
-	detail.BlindWrites = bw
+	detail.BlindWrites = blindWrites
 
-	en, err := s.fetchEndorsements(ctx, tx.BlockNum, tx.TxNum)
+	endorsements, err := s.fetchEndorsements(ctx, tx.BlockNum, tx.TxNum)
 	if err != nil {
 		return nil, err
 	}
-	detail.Endorsements = en
+	detail.Endorsements = endorsements
 
-	rw, err := s.fetchReadWrites(ctx, tx.BlockNum, tx.TxNum)
+	readWrites, err := s.fetchReadWrites(ctx, tx.BlockNum, tx.TxNum)
 	if err != nil {
 		return nil, err
 	}
-	detail.ReadWrites = rw
+	detail.ReadWrites = readWrites
 
-	ro, err := s.fetchReadsOnly(ctx, tx.BlockNum, tx.TxNum)
+	readsOnly, err := s.fetchReadsOnly(ctx, tx.BlockNum, tx.TxNum)
 	if err != nil {
 		return nil, err
 	}
-	detail.ReadsOnly = ro
+	detail.ReadsOnly = readsOnly
 
 	return detail, nil
 }

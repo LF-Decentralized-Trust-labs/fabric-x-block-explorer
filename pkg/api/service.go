@@ -91,7 +91,7 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 	defer streamer.Close()
 
-	wp, err := blockpipeline.New(blockpipeline.Config{
+	pipeline, err := blockpipeline.New(blockpipeline.Config{
 		Buffer:   s.cfg.Buffer,
 		Workers:  s.cfg.Workers,
 		DB:       pool,
@@ -117,7 +117,7 @@ func (s *Service) Run(ctx context.Context) error {
 
 	g, gCtx := errgroup.WithContext(ctx)
 	g.Go(func() error { return s.runRESTServer(restLis, restSrv) })
-	g.Go(func() error { return wp.Start(gCtx) })
+	g.Go(func() error { return pipeline.Start(gCtx) })
 
 	s.ready.SignalReady()
 
