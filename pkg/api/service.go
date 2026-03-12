@@ -91,13 +91,16 @@ func (s *Service) Run(ctx context.Context) error {
 	}
 	defer streamer.Close()
 
-	wp := blockpipeline.New(blockpipeline.Config{
+	wp, err := blockpipeline.New(blockpipeline.Config{
 		Buffer:   s.cfg.Buffer,
 		Workers:  s.cfg.Workers,
 		DB:       pool,
 		Streamer: streamer,
 		Retry:    s.cfg.Sidecar.Retry,
 	})
+	if err != nil {
+		return err
+	}
 
 	restSrv := &http.Server{
 		Addr:              s.cfg.Server.REST.Endpoint.Address(),
