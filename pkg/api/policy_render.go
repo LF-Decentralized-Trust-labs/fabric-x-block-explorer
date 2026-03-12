@@ -105,38 +105,38 @@ func renderRule(rule *commonpb.SignaturePolicy, ids []*msppb.MSPPrincipal) strin
 		}
 		return fmt.Sprintf("principal[%d]", idx)
 	case *commonpb.SignaturePolicy_NOutOf_:
-		nof := t.NOutOf
-		parts := make([]string, 0, len(nof.Rules))
-		for _, r := range nof.Rules {
-			parts = append(parts, renderRule(r, ids))
+		nOutOf := t.NOutOf
+		parts := make([]string, 0, len(nOutOf.Rules))
+		for _, subRule := range nOutOf.Rules {
+			parts = append(parts, renderRule(subRule, ids))
 		}
-		return fmt.Sprintf("%d-of(%s)", nof.N, strings.Join(parts, ", "))
+		return fmt.Sprintf("%d-of(%s)", nOutOf.N, strings.Join(parts, ", "))
 	default:
 		return ""
 	}
 }
 
-func renderPrincipal(p *msppb.MSPPrincipal) string {
-	if p == nil {
+func renderPrincipal(principal *msppb.MSPPrincipal) string {
+	if principal == nil {
 		return "unknown"
 	}
 
-	switch p.PrincipalClassification { //nolint:exhaustive
+	switch principal.PrincipalClassification { //nolint:exhaustive
 	case msppb.MSPPrincipal_ROLE:
 		var role msppb.MSPRole
-		if err := proto.Unmarshal(p.Principal, &role); err == nil {
+		if err := proto.Unmarshal(principal.Principal, &role); err == nil {
 			return fmt.Sprintf("%s.%s", role.MspIdentifier, strings.ToLower(role.Role.String()))
 		}
 	case msppb.MSPPrincipal_ORGANIZATION_UNIT:
-		var ou msppb.OrganizationUnit
-		if err := proto.Unmarshal(p.Principal, &ou); err == nil {
-			return fmt.Sprintf("%s.%s", ou.MspIdentifier, ou.OrganizationalUnitIdentifier)
+		var orgUnit msppb.OrganizationUnit
+		if err := proto.Unmarshal(principal.Principal, &orgUnit); err == nil {
+			return fmt.Sprintf("%s.%s", orgUnit.MspIdentifier, orgUnit.OrganizationalUnitIdentifier)
 		}
 	default:
-		return fmt.Sprintf("principal(%x)", p.Principal)
+		return fmt.Sprintf("principal(%x)", principal.Principal)
 	}
 
-	return fmt.Sprintf("principal(%x)", p.Principal)
+	return fmt.Sprintf("principal(%x)", principal.Principal)
 }
 
 func renderConfigGroupTree(path string, group *commonpb.ConfigGroup, depth int) string {

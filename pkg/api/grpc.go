@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"math"
 
+	"github.com/cockroachdb/errors"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"google.golang.org/grpc/codes"
@@ -26,7 +27,7 @@ import (
 func (s *Service) GetBlockHeight(ctx context.Context, _ *emptypb.Empty) (*explorerv1.GetBlockHeightResponse, error) {
 	heightResult, err := s.q.GetBlockHeight(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	var height int64
 	switch v := heightResult.(type) {
@@ -60,13 +61,13 @@ func (s *Service) ListBlocks(
 		FromNum: req.From, ToNum: toNum, Lim: limit, Off: req.Offset,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	blocks := make([]*explorerv1.BlockSummary, len(rows))
-	for i, r := range rows {
+	for i, row := range rows {
 		blocks[i] = &explorerv1.BlockSummary{
-			BlockNum: r.BlockNum, TxCount: r.TxCount,
-			PreviousHash: r.PreviousHash, DataHash: r.DataHash,
+			BlockNum: row.BlockNum, TxCount: row.TxCount,
+			PreviousHash: row.PreviousHash, DataHash: row.DataHash,
 		}
 	}
 	return &explorerv1.ListBlocksResponse{Blocks: blocks}, nil
@@ -91,7 +92,7 @@ func (s *Service) GetBlockDetail(
 		BlockNum: req.BlockNum, Limit: txLimit, Offset: req.TxOffset,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	txDetails, err := s.loadBlockTxDetails(ctx, txRows)
 	if err != nil {
@@ -138,14 +139,14 @@ func (s *Service) GetNamespacePolicies(
 	}
 	rows, err := s.q.GetNamespacePolicies(ctx, req.Namespace)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	policies := make([]*explorerv1.NamespacePolicyRow, len(rows))
-	for i, r := range rows {
-		decodedPol := decodePolicy(r.Policy)
+	for i, row := range rows {
+		decodedPol := decodePolicy(row.Policy)
 		policies[i] = &explorerv1.NamespacePolicyRow{
-			Namespace:     r.Namespace,
-			Version:       r.Version,
+			Namespace:     row.Namespace,
+			Version:       row.Version,
 			Policy:        decodedPol.PolicyExpression,
 			Certificates:  decodedPol.Certificates,
 			MspIds:        decodedPol.MspIDs,
@@ -162,7 +163,7 @@ func (s *Service) GetNamespacePolicies(
 func (s *Service) fetchBlindWrites(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.BlindWriteRow, error) {
 	rows, err := s.q.GetBlindWritesByTx(ctx, dbsqlc.GetBlindWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return mapBlindWritesByTx(rows), nil
 }
@@ -171,7 +172,7 @@ func (s *Service) fetchBlindWrites(ctx context.Context, blockNum, txNum int64) (
 func (s *Service) fetchEndorsements(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.EndorsementRow, error) {
 	rows, err := s.q.GetEndorsementsByTx(ctx, dbsqlc.GetEndorsementsByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return mapEndorsementsByTx(rows), nil
 }
@@ -180,7 +181,7 @@ func (s *Service) fetchEndorsements(ctx context.Context, blockNum, txNum int64) 
 func (s *Service) fetchReadWrites(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.ReadWriteRow, error) {
 	rows, err := s.q.GetReadWritesByTx(ctx, dbsqlc.GetReadWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return mapReadWritesByTx(rows), nil
 }
@@ -189,7 +190,7 @@ func (s *Service) fetchReadWrites(ctx context.Context, blockNum, txNum int64) ([
 func (s *Service) fetchReadsOnly(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.ReadOnlyRow, error) {
 	rows, err := s.q.GetReadsOnlyByTx(ctx, dbsqlc.GetReadsOnlyByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	return mapReadsOnlyByTx(rows), nil
 }
@@ -257,7 +258,7 @@ func (s *Service) fetchBlockTxDatasets(ctx context.Context, txRows []dbsqlc.Tran
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	endorsementRows, err := s.q.GetEndorsementsByBlockTxRange(ctx, dbsqlc.GetEndorsementsByBlockTxRangeParams{
 		BlockNum: blockNum,
@@ -265,7 +266,7 @@ func (s *Service) fetchBlockTxDatasets(ctx context.Context, txRows []dbsqlc.Tran
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	readWriteRows, err := s.q.GetReadWritesByBlockTxRange(ctx, dbsqlc.GetReadWritesByBlockTxRangeParams{
 		BlockNum: blockNum,
@@ -273,7 +274,7 @@ func (s *Service) fetchBlockTxDatasets(ctx context.Context, txRows []dbsqlc.Tran
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	readsOnlyRows, err := s.q.GetReadsOnlyByBlockTxRange(ctx, dbsqlc.GetReadsOnlyByBlockTxRangeParams{
 		BlockNum: blockNum,
@@ -281,7 +282,7 @@ func (s *Service) fetchBlockTxDatasets(ctx context.Context, txRows []dbsqlc.Tran
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 
 	datasets := newBlockTxDatasets(txRows)
@@ -359,35 +360,35 @@ func (d *blockTxDatasets) addReadsOnly(rows []dbsqlc.GetReadsOnlyByBlockTxRangeR
 }
 
 func mapBlindWritesByTx(rows []dbsqlc.GetBlindWritesByTxRow) []*explorerv1.BlindWriteRow {
-	out := make([]*explorerv1.BlindWriteRow, len(rows))
-	for i, r := range rows {
-		out[i] = newBlindWriteRow(r.NsID, r.Key, r.Value)
+	result := make([]*explorerv1.BlindWriteRow, len(rows))
+	for i, row := range rows {
+		result[i] = newBlindWriteRow(row.NsID, row.Key, row.Value)
 	}
-	return out
+	return result
 }
 
 func mapEndorsementsByTx(rows []dbsqlc.GetEndorsementsByTxRow) []*explorerv1.EndorsementRow {
-	out := make([]*explorerv1.EndorsementRow, len(rows))
-	for i, r := range rows {
-		out[i] = newEndorsementRow(r.NsID, r.Endorsement, r.MspID, r.Identity)
+	result := make([]*explorerv1.EndorsementRow, len(rows))
+	for i, row := range rows {
+		result[i] = newEndorsementRow(row.NsID, row.Endorsement, row.MspID, row.Identity)
 	}
-	return out
+	return result
 }
 
 func mapReadWritesByTx(rows []dbsqlc.GetReadWritesByTxRow) []*explorerv1.ReadWriteRow {
-	out := make([]*explorerv1.ReadWriteRow, len(rows))
-	for i, r := range rows {
-		out[i] = newReadWriteRow(r.NsID, r.Key, r.ReadVersion, r.Value)
+	result := make([]*explorerv1.ReadWriteRow, len(rows))
+	for i, row := range rows {
+		result[i] = newReadWriteRow(row.NsID, row.Key, row.ReadVersion, row.Value)
 	}
-	return out
+	return result
 }
 
 func mapReadsOnlyByTx(rows []dbsqlc.GetReadsOnlyByTxRow) []*explorerv1.ReadOnlyRow {
-	out := make([]*explorerv1.ReadOnlyRow, len(rows))
-	for i, r := range rows {
-		out[i] = newReadOnlyRow(r.NsID, r.Key, r.Version)
+	result := make([]*explorerv1.ReadOnlyRow, len(rows))
+	for i, row := range rows {
+		result[i] = newReadOnlyRow(row.NsID, row.Key, row.Version)
 	}
-	return out
+	return result
 }
 
 func newBlindWriteRow(nsID string, key, value []byte) *explorerv1.BlindWriteRow {

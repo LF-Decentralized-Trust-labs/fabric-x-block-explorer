@@ -100,28 +100,28 @@ func extractCerts(text string) []string {
 func extractMspIDs(text string) []string {
 	matches := reMSPID.FindAllStringSubmatch(text, -1)
 	seen := make(map[string]bool)
-	out := []string{}
-	for _, m := range matches {
-		if id := m[1]; !seen[id] {
-			seen[id] = true
-			out = append(out, id)
+	mspIDs := []string{}
+	for _, match := range matches {
+		if mspID := match[1]; !seen[mspID] {
+			seen[mspID] = true
+			mspIDs = append(mspIDs, mspID)
 		}
 	}
-	return out
+	return mspIDs
 }
 
 // extractEndpoints extracts unique orderer endpoints (host:port).
 func extractEndpoints(text string) []string {
 	matches := reEndpoint.FindAllString(text, -1)
 	seen := make(map[string]bool)
-	out := []string{}
+	endpoints := []string{}
 	for _, ep := range matches {
 		if !seen[ep] {
 			seen[ep] = true
-			out = append(out, ep)
+			endpoints = append(endpoints, ep)
 		}
 	}
-	return out
+	return endpoints
 }
 
 // extractHashAlgorithm returns the hashing algorithm found in the raw text.
