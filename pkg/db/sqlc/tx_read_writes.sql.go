@@ -11,6 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getReadWritesByBlockTxRange = `-- name: GetReadWritesByBlockTxRange :many
+SELECT tx_num, ns_id, key, read_version, value
+FROM tx_read_writes
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, key
+`
+
+type GetReadWritesByBlockTxRangeParams struct {
+	BlockNum int64 `json:"block_num"`
+	TxNum    int64 `json:"tx_num"`
+	TxNum_2  int64 `json:"tx_num_2"`
+}
+
+type GetReadWritesByBlockTxRangeRow struct {
+	TxNum       int64       `json:"tx_num"`
+	NsID        string      `json:"ns_id"`
+	Key         []byte      `json:"key"`
+	ReadVersion pgtype.Int8 `json:"read_version"`
+	Value       []byte      `json:"value"`
+}
+
+func (q *Queries) GetReadWritesByBlockTxRange(ctx context.Context, arg GetReadWritesByBlockTxRangeParams) ([]GetReadWritesByBlockTxRangeRow, error) {
+	rows, err := q.db.Query(ctx, getReadWritesByBlockTxRange, arg.BlockNum, arg.TxNum, arg.TxNum_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetReadWritesByBlockTxRangeRow{}
+	for rows.Next() {
+		var i GetReadWritesByBlockTxRangeRow
+		if err := rows.Scan(
+			&i.TxNum,
+			&i.NsID,
+			&i.Key,
+			&i.ReadVersion,
+			&i.Value,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getReadWritesByTx = `-- name: GetReadWritesByTx :many
 SELECT ns_id, key, read_version, value
 FROM tx_read_writes

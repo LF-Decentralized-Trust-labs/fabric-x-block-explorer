@@ -61,3 +61,48 @@ func (q *Queries) InsertBlock(ctx context.Context, arg InsertBlockParams) error 
 	)
 	return err
 }
+
+const listBlocks = `-- name: ListBlocks :many
+SELECT block_num, tx_count, previous_hash, data_hash
+FROM blocks
+WHERE block_num >= $1 AND block_num <= $2
+ORDER BY block_num
+LIMIT $4 OFFSET $3
+`
+
+type ListBlocksParams struct {
+	FromNum int64 `json:"from_num"`
+	ToNum   int64 `json:"to_num"`
+	Off     int32 `json:"off"`
+	Lim     int32 `json:"lim"`
+}
+
+func (q *Queries) ListBlocks(ctx context.Context, arg ListBlocksParams) ([]Block, error) {
+	rows, err := q.db.Query(ctx, listBlocks,
+		arg.FromNum,
+		arg.ToNum,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Block{}
+	for rows.Next() {
+		var i Block
+		if err := rows.Scan(
+			&i.BlockNum,
+			&i.TxCount,
+			&i.PreviousHash,
+			&i.DataHash,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

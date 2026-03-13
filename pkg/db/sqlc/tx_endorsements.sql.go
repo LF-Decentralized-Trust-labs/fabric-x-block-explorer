@@ -11,6 +11,53 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getEndorsementsByBlockTxRange = `-- name: GetEndorsementsByBlockTxRange :many
+SELECT tx_num, ns_id, endorsement, msp_id, identity
+FROM tx_endorsements
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, endorsement
+`
+
+type GetEndorsementsByBlockTxRangeParams struct {
+	BlockNum int64 `json:"block_num"`
+	TxNum    int64 `json:"tx_num"`
+	TxNum_2  int64 `json:"tx_num_2"`
+}
+
+type GetEndorsementsByBlockTxRangeRow struct {
+	TxNum       int64       `json:"tx_num"`
+	NsID        string      `json:"ns_id"`
+	Endorsement []byte      `json:"endorsement"`
+	MspID       pgtype.Text `json:"msp_id"`
+	Identity    []byte      `json:"identity"`
+}
+
+func (q *Queries) GetEndorsementsByBlockTxRange(ctx context.Context, arg GetEndorsementsByBlockTxRangeParams) ([]GetEndorsementsByBlockTxRangeRow, error) {
+	rows, err := q.db.Query(ctx, getEndorsementsByBlockTxRange, arg.BlockNum, arg.TxNum, arg.TxNum_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetEndorsementsByBlockTxRangeRow{}
+	for rows.Next() {
+		var i GetEndorsementsByBlockTxRangeRow
+		if err := rows.Scan(
+			&i.TxNum,
+			&i.NsID,
+			&i.Endorsement,
+			&i.MspID,
+			&i.Identity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getEndorsementsByTx = `-- name: GetEndorsementsByTx :many
 SELECT ns_id, endorsement, msp_id, identity
 FROM tx_endorsements

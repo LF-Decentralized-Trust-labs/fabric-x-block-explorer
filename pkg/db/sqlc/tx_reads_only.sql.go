@@ -11,6 +11,51 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getReadsOnlyByBlockTxRange = `-- name: GetReadsOnlyByBlockTxRange :many
+SELECT tx_num, ns_id, key, version
+FROM tx_reads_only
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, key
+`
+
+type GetReadsOnlyByBlockTxRangeParams struct {
+	BlockNum int64 `json:"block_num"`
+	TxNum    int64 `json:"tx_num"`
+	TxNum_2  int64 `json:"tx_num_2"`
+}
+
+type GetReadsOnlyByBlockTxRangeRow struct {
+	TxNum   int64       `json:"tx_num"`
+	NsID    string      `json:"ns_id"`
+	Key     []byte      `json:"key"`
+	Version pgtype.Int8 `json:"version"`
+}
+
+func (q *Queries) GetReadsOnlyByBlockTxRange(ctx context.Context, arg GetReadsOnlyByBlockTxRangeParams) ([]GetReadsOnlyByBlockTxRangeRow, error) {
+	rows, err := q.db.Query(ctx, getReadsOnlyByBlockTxRange, arg.BlockNum, arg.TxNum, arg.TxNum_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetReadsOnlyByBlockTxRangeRow{}
+	for rows.Next() {
+		var i GetReadsOnlyByBlockTxRangeRow
+		if err := rows.Scan(
+			&i.TxNum,
+			&i.NsID,
+			&i.Key,
+			&i.Version,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getReadsOnlyByTx = `-- name: GetReadsOnlyByTx :many
 SELECT ns_id, key, version
 FROM tx_reads_only
