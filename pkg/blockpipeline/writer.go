@@ -22,15 +22,15 @@ import (
 func blockWriter(ctx context.Context, persister *db.BlockWriter, in channel.Reader[*types.ProcessedBlock]) error {
 	logger.Info("blockWriter started")
 	for ctx.Err() == nil {
-		pb, ok := in.Read()
+		processedBlock, ok := in.Read()
 		if !ok {
 			// in closed: all processors exited cleanly or ctx cancelled.
 			return ctx.Err()
 		}
-		if pb == nil {
+		if processedBlock == nil {
 			continue
 		}
-		if err := persister.WriteProcessedBlock(ctx, pb); err != nil {
+		if err := persister.WriteProcessedBlock(ctx, processedBlock); err != nil {
 			logger.Warnf("blockWriter stopped: %v", err)
 			return errors.Wrap(err, "db write error")
 		}

@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package db
 
 import (
+	"log"
 	"os"
 	"testing"
 
@@ -28,7 +29,7 @@ func TestMain(m *testing.M) {
 		"DB_TYPE":       committerdbtest.PostgresDBType,
 	} {
 		if err := os.Setenv(k, v); err != nil {
-			panic(err)
+			log.Fatal(err) //nolint:revive // os.Exit semantics; t is not available in TestMain
 		}
 	}
 	m.Run()

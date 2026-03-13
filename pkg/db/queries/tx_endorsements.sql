@@ -8,3 +8,9 @@ SELECT ns_id, endorsement, msp_id, identity
 FROM tx_endorsements
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, endorsement;
+
+-- name: GetEndorsementsByBlockTxRange :many
+SELECT tx_num, ns_id, endorsement, msp_id, identity
+FROM tx_endorsements
+WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
+ORDER BY tx_num, ns_id, endorsement;

@@ -199,7 +199,7 @@ func buildTxNamespaceRecord(nd nsData) types.TxNamespaceRecord {
 			rec.MspID = mspID
 			rec.Identity = identityJSON
 		} else {
-			logger.Warnf("failed to parse endorsement identity: %v", err)
+			logger.Debugf("failed to parse endorsement identity (fabric-x raw signature): %v", err)
 		}
 		nsRecord.Endorsements = []types.EndorsementRecord{rec}
 	}
