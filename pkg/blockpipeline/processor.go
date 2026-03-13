@@ -30,24 +30,24 @@ func blockProcessor(
 ) error {
 	logger.Info("blockProcessor started")
 	for ctx.Err() == nil {
-		blk, ok := in.Read()
+		inputBlock, ok := in.Read()
 		if !ok {
 			// in closed: upstream receiver exited cleanly or ctx cancelled.
 			return ctx.Err()
 		}
-		if blk == nil {
+		if inputBlock == nil {
 			continue
 		}
-		parsedData, blockInfo, err := parser.Parse(blk)
+		parsedData, blockInfo, err := parser.Parse(inputBlock)
 		if err != nil {
 			logger.Warnf("blockProcessor stopped: %v", err)
 			return errors.Wrapf(err, "block processing error")
 		}
-		processed := &types.ProcessedBlock{
+		processedBlock := &types.ProcessedBlock{
 			Data:      parsedData,
 			BlockInfo: blockInfo,
 		}
-		out.Write(processed)
+		out.Write(processedBlock)
 	}
 	logger.Info("blockProcessor stopping")
 	return ctx.Err()

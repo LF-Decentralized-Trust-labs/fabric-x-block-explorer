@@ -11,11 +11,14 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/cockroachdb/errors"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/hyperledger/fabric-x-committer/utils/grpcerror"
 
 	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
 )
@@ -112,26 +115,32 @@ func respond(w http.ResponseWriter, r *http.Request, fn func(context.Context) (p
 	msg, err := fn(r.Context())
 	if err != nil {
 		code := statusToHTTPCode(err)
-		http.Error(w, err.Error(), code)
+		if code >= http.StatusInternalServerError {
+			http.Error(w, "internal server error", code)
+		} else if st, ok := status.FromError(err); ok {
+			http.Error(w, st.Message(), code)
+		} else {
+			http.Error(w, err.Error(), code)
+		}
 		return
 	}
 	b, err := jsonOpts.Marshal(msg)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(b) //nolint:gosec // b is protojson-marshalled data, not user input
+	_, _ = w.Write(b) //nolint:gosec // response body, not user-controlled
 }
 
 func pathInt64(r *http.Request, key string) (int64, error) {
 	v := r.PathValue(key)
 	parsed, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be an integer: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be an integer: %q", key, v))
 	}
 	if parsed < 0 {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be >= 0: %q", key, v))
 	}
 	return parsed, nil
 }
@@ -143,10 +152,10 @@ func queryOptionalInt32(r *http.Request, key string) (int32, error) {
 	}
 	parsed, err := strconv.ParseInt(v, 10, 32)
 	if err != nil {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be an int32: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be an int32: %q", key, v))
 	}
 	if parsed < 0 {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be >= 0: %q", key, v))
 	}
 	return int32(parsed), nil
 }
@@ -158,10 +167,10 @@ func queryOptionalInt64(r *http.Request, key string) (int64, error) {
 	}
 	parsed, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be an int64: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be an int64: %q", key, v))
 	}
 	if parsed < 0 {
-		return 0, status.Errorf(codes.InvalidArgument, "%s must be >= 0: %q", key, v)
+		return 0, grpcerror.WrapInvalidArgument(errors.Errorf("%s must be >= 0: %q", key, v))
 	}
 	return parsed, nil
 }

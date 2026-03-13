@@ -8,10 +8,11 @@ package api
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/cockroachdb/errors"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"

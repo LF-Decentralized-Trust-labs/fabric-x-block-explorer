@@ -33,18 +33,18 @@ import (
 // It implements connection.Service so it integrates with connection.StartService.
 type Service struct {
 	explorerv1.UnimplementedBlockExplorerServiceServer
-	cfg    *config.Config
-	q      dbsqlc.Querier
-	ready  *channel.Ready
-	health *health.Server
+	config      *config.Config
+	querier     dbsqlc.Querier
+	ready       *channel.Ready
+	healthcheck *health.Server
 }
 
 // New creates a new explorer Service.
 func New(cfg *config.Config) *Service {
 	return &Service{
-		cfg:    cfg,
-		ready:  channel.NewReady(),
-		health: connection.DefaultHealthCheckService(),
+		config:      cfg,
+		ready:       channel.NewReady(),
+		healthcheck: connection.DefaultHealthCheckService(),
 	}
 }
 
@@ -56,7 +56,7 @@ func (s *Service) WaitForReady(ctx context.Context) bool {
 // RegisterService implements connection.Service — registers the gRPC server.
 func (s *Service) RegisterService(server *grpc.Server) {
 	explorerv1.RegisterBlockExplorerServiceServer(server, s)
-	healthgrpc.RegisterHealthServer(server, s.health)
+	healthgrpc.RegisterHealthServer(server, s.healthcheck)
 	reflection.Register(server)
 }
 
@@ -64,15 +64,15 @@ func (s *Service) RegisterService(server *grpc.Server) {
 // ingestion pipeline, and runs the REST server.
 func (s *Service) Run(ctx context.Context) error {
 	pool, err := db.NewPostgres(ctx, db.Config{
-		Endpoints:       s.cfg.DB.Endpoints,
-		User:            s.cfg.DB.User,
-		Password:        s.cfg.DB.Password,
-		DBName:          s.cfg.DB.DBName,
-		TLS:             s.cfg.DB.TLS,
-		MaxConns:        s.cfg.DB.MaxConns,
-		MaxConnIdleTime: s.cfg.DB.MaxConnIdleTime,
-		MaxConnLifetime: s.cfg.DB.MaxConnLifetime,
-		Retry:           &s.cfg.DB.Retry,
+		Endpoints:       s.config.DB.Endpoints,
+		User:            s.config.DB.User,
+		Password:        s.config.DB.Password,
+		DBName:          s.config.DB.DBName,
+		TLS:             s.config.DB.TLS,
+		MaxConns:        s.config.DB.MaxConns,
+		MaxConnIdleTime: s.config.DB.MaxConnIdleTime,
+		MaxConnLifetime: s.config.DB.MaxConnLifetime,
+		Retry:           &s.config.DB.Retry,
 	})
 	if err != nil {
 		return err
@@ -83,29 +83,29 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 
-	s.q = dbsqlc.New(pool)
+	s.querier = dbsqlc.New(pool)
 
-	streamer, err := sidecarstream.NewStreamer(s.cfg.Sidecar)
+	streamer, err := sidecarstream.NewStreamer(s.config.Sidecar)
 	if err != nil {
 		return err
 	}
 	defer streamer.Close()
 
 	pipeline, err := blockpipeline.New(blockpipeline.Config{
-		Buffer:   s.cfg.Buffer,
-		Workers:  s.cfg.Workers,
+		Buffer:   s.config.Buffer,
+		Workers:  s.config.Workers,
 		DB:       pool,
 		Streamer: streamer,
-		Retry:    s.cfg.Sidecar.Retry,
+		Retry:    s.config.Sidecar.Retry,
 	})
 	if err != nil {
 		return err
 	}
 
 	restSrv := &http.Server{
-		Addr:              s.cfg.Server.REST.Endpoint.Address(),
+		Addr:              s.config.Server.REST.Endpoint.Address(),
 		Handler:           s.newRESTRouter(),
-		ReadHeaderTimeout: s.cfg.Server.REST.ReadHeaderTimeout,
+		ReadHeaderTimeout: s.config.Server.REST.ReadHeaderTimeout,
 	}
 	restLis, err := net.Listen("tcp", restSrv.Addr)
 	if err != nil {

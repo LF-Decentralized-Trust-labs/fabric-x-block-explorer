@@ -61,9 +61,9 @@ func TestBlockProcessor(t *testing.T) {
 		s := startBlockProcessor(t.Context())
 		s.in <- validBlock(1, 0)
 		select {
-		case pb := <-s.out:
-			assert.Equal(t, uint64(1), pb.BlockInfo.Number)
-			assert.NotNil(t, pb.Data)
+		case processedBlock := <-s.out:
+			assert.Equal(t, uint64(1), processedBlock.BlockInfo.Number)
+			assert.NotNil(t, processedBlock.Data)
 		case err := <-s.done:
 			require.Fail(t, "unexpected processor exit", err)
 		}
@@ -75,8 +75,8 @@ func TestBlockProcessor(t *testing.T) {
 		s.in <- nil              // should be skipped
 		s.in <- validBlock(2, 0) // should arrive
 		select {
-		case pb := <-s.out:
-			assert.Equal(t, uint64(2), pb.BlockInfo.Number)
+		case processedBlock := <-s.out:
+			assert.Equal(t, uint64(2), processedBlock.BlockInfo.Number)
 		case err := <-s.done:
 			require.Fail(t, "unexpected processor exit", err)
 		}

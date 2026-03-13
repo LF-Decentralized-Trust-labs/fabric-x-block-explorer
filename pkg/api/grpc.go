@@ -18,16 +18,21 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/hyperledger/fabric-x-committer/utils/grpcerror"
+	"github.com/hyperledger/fabric-x-committer/utils/logging"
+
 	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
 
+var logger = logging.New("api")
+
 // GetBlockHeight returns the current block height (highest block number in the DB).
 func (s *Service) GetBlockHeight(ctx context.Context, _ *emptypb.Empty) (*explorerv1.GetBlockHeightResponse, error) {
-	heightResult, err := s.q.GetBlockHeight(ctx)
+	heightResult, err := s.querier.GetBlockHeight(ctx)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	var height int64
 	switch v := heightResult.(type) {
@@ -36,7 +41,9 @@ func (s *Service) GetBlockHeight(ctx context.Context, _ *emptypb.Empty) (*explor
 	case nil:
 		// no blocks yet, height is 0
 	default:
-		return nil, status.Errorf(codes.Internal, "unexpected block height type: %T", v)
+		internalErr := errors.Errorf("unexpected block height type: %T", v)
+		logger.ErrorStackTrace(internalErr)
+		return nil, grpcerror.WrapInternalError(internalErr)
 	}
 	return &explorerv1.GetBlockHeightResponse{Height: height}, nil
 }
@@ -57,11 +64,11 @@ func (s *Service) ListBlocks(
 	if limit == 0 {
 		limit = s.defaultTxLimit()
 	}
-	rows, err := s.q.ListBlocks(ctx, dbsqlc.ListBlocksParams{
+	rows, err := s.querier.ListBlocks(ctx, dbsqlc.ListBlocksParams{
 		FromNum: req.From, ToNum: toNum, Lim: limit, Off: req.Offset,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	blocks := make([]*explorerv1.BlockSummary, len(rows))
 	for i, row := range rows {
@@ -80,19 +87,19 @@ func (s *Service) GetBlockDetail(
 	if err := validateBlockDetailRequest(req); err != nil {
 		return nil, err
 	}
-	blockRow, err := s.q.GetBlock(ctx, req.BlockNum)
+	blockRow, err := s.querier.GetBlock(ctx, req.BlockNum)
 	if err != nil {
-		return nil, notFound(err)
+		return nil, wrapExplorerError(err)
 	}
 	txLimit := req.TxLimit
 	if txLimit == 0 {
 		txLimit = s.defaultTxLimit()
 	}
-	txRows, err := s.q.GetValidationCodeByBlock(ctx, dbsqlc.GetValidationCodeByBlockParams{
+	txRows, err := s.querier.GetValidationCodeByBlock(ctx, dbsqlc.GetValidationCodeByBlockParams{
 		BlockNum: req.BlockNum, Limit: txLimit, Offset: req.TxOffset,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	txDetails, err := s.loadBlockTxDetails(ctx, txRows)
 	if err != nil {
@@ -121,11 +128,11 @@ func (s *Service) GetTransactionDetail(
 	}
 	txID, err := hex.DecodeString(req.TxId)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "tx_id must be hex-encoded")
+		return nil, grpcerror.WrapInvalidArgument(errors.New("tx_id must be hex-encoded"))
 	}
-	tx, err := s.q.GetValidationCodeByTxID(ctx, txID)
+	tx, err := s.querier.GetValidationCodeByTxID(ctx, txID)
 	if err != nil {
-		return nil, notFound(err)
+		return nil, wrapExplorerError(err)
 	}
 	return s.loadTxDetail(ctx, tx)
 }
@@ -137,9 +144,9 @@ func (s *Service) GetNamespacePolicies(
 	if err := validateNamespacePoliciesRequest(req); err != nil {
 		return nil, err
 	}
-	rows, err := s.q.GetNamespacePolicies(ctx, req.Namespace)
+	rows, err := s.querier.GetNamespacePolicies(ctx, req.Namespace)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	policies := make([]*explorerv1.NamespacePolicyRow, len(rows))
 	for i, row := range rows {
@@ -161,36 +168,36 @@ func (s *Service) GetNamespacePolicies(
 
 // fetchBlindWrites loads blind-write rows for a transaction.
 func (s *Service) fetchBlindWrites(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.BlindWriteRow, error) {
-	rows, err := s.q.GetBlindWritesByTx(ctx, dbsqlc.GetBlindWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
+	rows, err := s.querier.GetBlindWritesByTx(ctx, dbsqlc.GetBlindWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	return mapBlindWritesByTx(rows), nil
 }
 
 // fetchEndorsements loads endorsement rows for a transaction.
 func (s *Service) fetchEndorsements(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.EndorsementRow, error) {
-	rows, err := s.q.GetEndorsementsByTx(ctx, dbsqlc.GetEndorsementsByTxParams{BlockNum: blockNum, TxNum: txNum})
+	rows, err := s.querier.GetEndorsementsByTx(ctx, dbsqlc.GetEndorsementsByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	return mapEndorsementsByTx(rows), nil
 }
 
 // fetchReadWrites loads read-write rows for a transaction.
 func (s *Service) fetchReadWrites(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.ReadWriteRow, error) {
-	rows, err := s.q.GetReadWritesByTx(ctx, dbsqlc.GetReadWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
+	rows, err := s.querier.GetReadWritesByTx(ctx, dbsqlc.GetReadWritesByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	return mapReadWritesByTx(rows), nil
 }
 
 // fetchReadsOnly loads read-only rows for a transaction.
 func (s *Service) fetchReadsOnly(ctx context.Context, blockNum, txNum int64) ([]*explorerv1.ReadOnlyRow, error) {
-	rows, err := s.q.GetReadsOnlyByTx(ctx, dbsqlc.GetReadsOnlyByTxParams{BlockNum: blockNum, TxNum: txNum})
+	rows, err := s.querier.GetReadsOnlyByTx(ctx, dbsqlc.GetReadsOnlyByTxParams{BlockNum: blockNum, TxNum: txNum})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 	return mapReadsOnlyByTx(rows), nil
 }
@@ -252,37 +259,37 @@ func (s *Service) loadBlockTxDetails(ctx context.Context, txRows []dbsqlc.Transa
 func (s *Service) fetchBlockTxDatasets(ctx context.Context, txRows []dbsqlc.Transaction) (*blockTxDatasets, error) {
 	blockNum, startTxNum, endTxNum := txBlockRange(txRows)
 
-	blindWritesRows, err := s.q.GetBlindWritesByBlockTxRange(ctx, dbsqlc.GetBlindWritesByBlockTxRangeParams{
+	blindWritesRows, err := s.querier.GetBlindWritesByBlockTxRange(ctx, dbsqlc.GetBlindWritesByBlockTxRangeParams{
 		BlockNum: blockNum,
 		TxNum:    startTxNum,
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
-	endorsementRows, err := s.q.GetEndorsementsByBlockTxRange(ctx, dbsqlc.GetEndorsementsByBlockTxRangeParams{
+	endorsementRows, err := s.querier.GetEndorsementsByBlockTxRange(ctx, dbsqlc.GetEndorsementsByBlockTxRangeParams{
 		BlockNum: blockNum,
 		TxNum:    startTxNum,
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
-	readWriteRows, err := s.q.GetReadWritesByBlockTxRange(ctx, dbsqlc.GetReadWritesByBlockTxRangeParams{
+	readWriteRows, err := s.querier.GetReadWritesByBlockTxRange(ctx, dbsqlc.GetReadWritesByBlockTxRangeParams{
 		BlockNum: blockNum,
 		TxNum:    startTxNum,
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
-	readsOnlyRows, err := s.q.GetReadsOnlyByBlockTxRange(ctx, dbsqlc.GetReadsOnlyByBlockTxRangeParams{
+	readsOnlyRows, err := s.querier.GetReadsOnlyByBlockTxRange(ctx, dbsqlc.GetReadsOnlyByBlockTxRangeParams{
 		BlockNum: blockNum,
 		TxNum:    startTxNum,
 		TxNum_2:  endTxNum,
 	})
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, wrapExplorerError(err)
 	}
 
 	datasets := newBlockTxDatasets(txRows)
@@ -420,8 +427,8 @@ func newReadOnlyRow(nsID string, key []byte, version pgtype.Int8) *explorerv1.Re
 // defaultTxLimit returns the configured default transaction limit, falling
 // back to a safe hardcoded value if configuration is unavailable.
 func (s *Service) defaultTxLimit() int32 {
-	if s != nil && s.cfg != nil && s.cfg.Server.REST.DefaultTxLimit > 0 {
-		return s.cfg.Server.REST.DefaultTxLimit
+	if s != nil && s.config != nil && s.config.Server.REST.DefaultTxLimit > 0 {
+		return s.config.Server.REST.DefaultTxLimit
 	}
 	return config.DefaultTxLimit
 }
@@ -435,68 +442,77 @@ func pgint8Ptr(v pgtype.Int8) *int64 {
 
 func validateListBlocksRequest(req *explorerv1.ListBlocksRequest) error {
 	if req == nil {
-		return status.Error(codes.InvalidArgument, "request is required")
+		return grpcerror.WrapInvalidArgument(errors.New("request is required"))
 	}
 	if req.From < 0 {
-		return status.Error(codes.InvalidArgument, "from must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("from must be >= 0"))
 	}
 	if req.To < 0 {
-		return status.Error(codes.InvalidArgument, "to must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("to must be >= 0"))
 	}
 	if req.To != 0 && req.To < req.From {
-		return status.Error(codes.InvalidArgument, "to must be >= from")
+		return grpcerror.WrapInvalidArgument(errors.New("to must be >= from"))
 	}
 	if req.Limit < 0 {
-		return status.Error(codes.InvalidArgument, "limit must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("limit must be >= 0"))
 	}
 	if req.Offset < 0 {
-		return status.Error(codes.InvalidArgument, "offset must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("offset must be >= 0"))
 	}
 	return nil
 }
 
 func validateBlockDetailRequest(req *explorerv1.GetBlockDetailRequest) error {
 	if req == nil {
-		return status.Error(codes.InvalidArgument, "request is required")
+		return grpcerror.WrapInvalidArgument(errors.New("request is required"))
 	}
 	if req.BlockNum < 0 {
-		return status.Error(codes.InvalidArgument, "block_num must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("block_num must be >= 0"))
 	}
 	if req.TxLimit < 0 {
-		return status.Error(codes.InvalidArgument, "tx_limit must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("tx_limit must be >= 0"))
 	}
 	if req.TxOffset < 0 {
-		return status.Error(codes.InvalidArgument, "tx_offset must be >= 0")
+		return grpcerror.WrapInvalidArgument(errors.New("tx_offset must be >= 0"))
 	}
 	return nil
 }
 
 func validateTxDetailRequest(req *explorerv1.GetTxDetailRequest) error {
 	if req == nil {
-		return status.Error(codes.InvalidArgument, "request is required")
+		return grpcerror.WrapInvalidArgument(errors.New("request is required"))
 	}
 	if req.TxId == "" {
-		return status.Error(codes.InvalidArgument, "tx_id is required")
+		return grpcerror.WrapInvalidArgument(errors.New("tx_id is required"))
 	}
 	return nil
 }
 
 func validateNamespacePoliciesRequest(req *explorerv1.GetNamespacePoliciesRequest) error {
 	if req == nil {
-		return status.Error(codes.InvalidArgument, "request is required")
+		return grpcerror.WrapInvalidArgument(errors.New("request is required"))
 	}
 	if req.Namespace == "" {
-		return status.Error(codes.InvalidArgument, "namespace is required")
+		return grpcerror.WrapInvalidArgument(errors.New("namespace is required"))
 	}
 	return nil
 }
 
-// notFound maps pgx.ErrNoRows to a gRPC NotFound status; other errors pass through.
-func notFound(err error) error {
-	if pgx.ErrNoRows == err { //nolint:errorlint // pgx.ErrNoRows is a sentinel, direct comparison is correct
+// wrapExplorerError wraps explorer errors with appropriate gRPC status codes.
+// pgx.ErrNoRows maps to NotFound, context errors to Cancelled, and all other
+// unexpected errors are logged (with stack trace) and mapped to Internal.
+func wrapExplorerError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
 		return status.Error(codes.NotFound, err.Error())
 	}
-	return err
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return grpcerror.WrapCancelled(err)
+	}
+	logger.ErrorStackTrace(err)
+	return grpcerror.WrapInternalError(err)
 }
 
 func pgtextPtr(v pgtype.Text) *string {
