@@ -109,57 +109,46 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestParseBlockWithTransaction(t *testing.T) {
+func TestParseContent(t *testing.T) {
 	t.Parallel()
-	ns := &protoblocktx.TxNamespace{
-		NsId:      "mycc",
-		NsVersion: 1,
-		ReadWrites: []*protoblocktx.ReadWrite{
-			{
-				Key:     []byte("key1"),
-				Value:   []byte("value1"),
-				Version: util.Ptr(uint64(10)),
-			},
-		},
-		ReadsOnly: []*protoblocktx.Read{
-			{
-				Key:     []byte("key2"),
-				Version: util.Ptr(uint64(5)),
-			},
-		},
-	}
 
-	env := createEnvelope(t,
-		&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx123"},
-		marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
-	)
-	block := buildBlock(t, blockSpec{
-		num:       10,
-		prevHash:  []byte("prev"),
-		dataHash:  []byte("data"),
-		envelopes: []*common.Envelope{env},
-		statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+	t.Run("read-write and reads-only sets", func(t *testing.T) {
+		t.Parallel()
+		ns := &protoblocktx.TxNamespace{
+			NsId:      "mycc",
+			NsVersion: 1,
+			ReadWrites: []*protoblocktx.ReadWrite{
+				{Key: []byte("key1"), Value: []byte("value1"), Version: util.Ptr(uint64(10))},
+			},
+			ReadsOnly: []*protoblocktx.Read{
+				{Key: []byte("key2"), Version: util.Ptr(uint64(5))},
+			},
+		}
+		env := createEnvelope(t,
+			&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx123"},
+			marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
+		)
+		block := buildBlock(t, blockSpec{
+			num: 10, prevHash: []byte("prev"), dataHash: []byte("data"),
+			envelopes: []*common.Envelope{env},
+			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+		})
+
+		parsedData, blockInfo, err := Parse(block)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(10), blockInfo.Number)
+		require.Len(t, parsedData.Transactions, 1)
+		tx := parsedData.Transactions[0]
+		assert.Equal(t, "tx123", tx.TxID)
+		require.Len(t, tx.Namespaces, 1)
+		nsRec := tx.Namespaces[0]
+		assert.Equal(t, "mycc", nsRec.NsID)
+		assert.Len(t, nsRec.ReadsOnly, 1)
+		assert.Equal(t, []byte("key2"), nsRec.ReadsOnly[0].Key)
+		assert.Len(t, nsRec.ReadWrites, 1)
+		assert.Equal(t, []byte("key1"), nsRec.ReadWrites[0].Key)
+		assert.Equal(t, []byte("value1"), nsRec.ReadWrites[0].Value)
 	})
-
-	parsedData, blockInfo, err := Parse(block)
-	require.NoError(t, err)
-	assert.NotNil(t, blockInfo)
-	assert.Equal(t, uint64(10), blockInfo.Number)
-
-	require.Len(t, parsedData.Transactions, 1)
-	tx := parsedData.Transactions[0]
-	assert.Equal(t, "tx123", tx.TxID)
-
-	require.Len(t, tx.Namespaces, 1)
-	nsRec := tx.Namespaces[0]
-	assert.Equal(t, "mycc", nsRec.NsID)
-
-	assert.Len(t, nsRec.ReadsOnly, 1)
-	assert.Equal(t, []byte("key2"), nsRec.ReadsOnly[0].Key)
-
-	assert.Len(t, nsRec.ReadWrites, 1)
-	assert.Equal(t, []byte("key1"), nsRec.ReadWrites[0].Key)
-	assert.Equal(t, []byte("value1"), nsRec.ReadWrites[0].Value)
 }
 
 func TestExtractPolicies(t *testing.T) {
@@ -225,38 +214,31 @@ func TestPolicyToJSON(t *testing.T) {
 
 func TestEndorsementToIdentityJSON(t *testing.T) {
 	t.Parallel()
-	// Create a valid SerializedIdentity
-	serializedID := &msp.SerializedIdentity{
-		Mspid:   "Org1MSP",
-		IdBytes: []byte("certificate_data"),
-	}
-	serializedIDBytes, err := proto.Marshal(serializedID)
-	require.NoError(t, err)
 
-	// Create an Endorsement
-	endorsement := &peer.Endorsement{
-		Endorser:  serializedIDBytes,
-		Signature: []byte("signature"),
-	}
-	endorsementBytes, err := proto.Marshal(endorsement)
-	require.NoError(t, err)
+	t.Run("valid identity", func(t *testing.T) {
+		t.Parallel()
+		serializedIDBytes, err := proto.Marshal(&msp.SerializedIdentity{
+			Mspid: "Org1MSP", IdBytes: []byte("certificate_data"),
+		})
+		require.NoError(t, err)
+		endorsementBytes, err := proto.Marshal(&peer.Endorsement{
+			Endorser: serializedIDBytes, Signature: []byte("signature"),
+		})
+		require.NoError(t, err)
 
-	// Test extraction
-	mspID, identityJSON, err := endorsementToIdentityJSON(endorsementBytes)
+		mspID, identityJSON, err := endorsementToIdentityJSON(endorsementBytes)
+		require.NoError(t, err)
+		require.NotNil(t, mspID)
+		assert.Equal(t, "Org1MSP", *mspID)
+		assert.Contains(t, string(identityJSON), "Org1MSP")
+		assert.Contains(t, string(identityJSON), "id_bytes")
+	})
 
-	require.NoError(t, err)
-	assert.NotNil(t, mspID)
-	assert.Equal(t, "Org1MSP", *mspID)
-	assert.NotNil(t, identityJSON)
-	assert.Contains(t, string(identityJSON), "Org1MSP")
-	assert.Contains(t, string(identityJSON), "id_bytes")
-}
-
-func TestEndorsementToIdentityJSONInvalidData(t *testing.T) {
-	t.Parallel()
-	invalidBytes := []byte("invalid_protobuf")
-	_, _, err := endorsementToIdentityJSON(invalidBytes)
-	assert.Error(t, err)
+	t.Run("invalid protobuf returns error", func(t *testing.T) {
+		t.Parallel()
+		_, _, err := endorsementToIdentityJSON([]byte("invalid_protobuf"))
+		assert.Error(t, err)
+	})
 }
 
 func TestRWSets(t *testing.T) {
@@ -296,161 +278,134 @@ func TestRWSets(t *testing.T) {
 	assert.NotNil(t, nsDataList[0].Endorsement)
 }
 
-func TestParseWithBlindWrites(t *testing.T) {
+func TestParseTransactions(t *testing.T) {
 	t.Parallel()
-	ns := &protoblocktx.TxNamespace{
-		NsId:      "mycc",
-		NsVersion: 1,
-		BlindWrites: []*protoblocktx.Write{
-			{
-				Key:   []byte("blind_key"),
-				Value: []byte("blind_value"),
-			},
-		},
-	}
 
-	env := createEnvelope(t,
-		&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx_blind"},
-		marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
-	)
-	block := buildBlock(t, blockSpec{
-		num:       1,
-		envelopes: []*common.Envelope{env},
-		statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+	t.Run("blind writes", func(t *testing.T) {
+		t.Parallel()
+		ns := &protoblocktx.TxNamespace{
+			NsId: "mycc", NsVersion: 1,
+			BlindWrites: []*protoblocktx.Write{
+				{Key: []byte("blind_key"), Value: []byte("blind_value")},
+			},
+		}
+		env := createEnvelope(t,
+			&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx_blind"},
+			marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
+		)
+		block := buildBlock(t, blockSpec{
+			num:       1,
+			envelopes: []*common.Envelope{env},
+			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+		})
+		parsedData, _, err := Parse(block)
+		require.NoError(t, err)
+		require.Len(t, parsedData.Transactions, 1)
+		nsRec := parsedData.Transactions[0].Namespaces[0]
+		assert.Len(t, nsRec.BlindWrites, 1)
+		assert.Equal(t, []byte("blind_key"), nsRec.BlindWrites[0].Key)
+		assert.Equal(t, []byte("blind_value"), nsRec.BlindWrites[0].Value)
 	})
 
-	parsedData, _, err := Parse(block)
-	require.NoError(t, err)
-
-	require.Len(t, parsedData.Transactions, 1)
-	nsRec := parsedData.Transactions[0].Namespaces[0]
-	assert.Len(t, nsRec.BlindWrites, 1)
-	assert.Equal(t, []byte("blind_key"), nsRec.BlindWrites[0].Key)
-	assert.Equal(t, []byte("blind_value"), nsRec.BlindWrites[0].Value)
-}
-
-func TestParseSkipsInvalidTransactions(t *testing.T) {
-	t.Parallel()
-	block := &common.Block{
-		Header: &common.BlockHeader{
-			Number: 1,
-		},
-		Data: &common.BlockData{
-			Data: [][]byte{
-				[]byte("invalid_envelope_data"),
+	t.Run("malformed envelope is skipped", func(t *testing.T) {
+		t.Parallel()
+		block := &common.Block{
+			Header: &common.BlockHeader{Number: 1},
+			Data:   &common.BlockData{Data: [][]byte{[]byte("invalid_envelope_data")}},
+			Metadata: &common.BlockMetadata{
+				Metadata: [][]byte{{}, {}, {byte(protoblocktx.Status_COMMITTED)}},
 			},
-		},
-		Metadata: &common.BlockMetadata{
-			Metadata: [][]byte{
-				{},
-				{},
-				{byte(protoblocktx.Status_COMMITTED)},
-			},
-		},
-	}
-
-	parsedData, blockInfo, err := Parse(block)
-	require.NoError(t, err)
-	assert.NotNil(t, blockInfo)
-
-	assert.Empty(t, parsedData.Transactions)
-}
-
-func TestParseConfigTransaction(t *testing.T) {
-	t.Parallel()
-	configTx := &protoblocktx.ConfigTransaction{
-		Version:  1,
-		Envelope: []byte("config_envelope_data"),
-	}
-	configBytes, err := proto.Marshal(configTx)
-	require.NoError(t, err)
-
-	env := createEnvelope(t,
-		&common.ChannelHeader{Type: int32(common.HeaderType_CONFIG)},
-		configBytes,
-	)
-	block := buildBlock(t, blockSpec{
-		num:       0,
-		envelopes: []*common.Envelope{env},
-		statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+		}
+		parsedData, blockInfo, err := Parse(block)
+		require.NoError(t, err)
+		assert.NotNil(t, blockInfo)
+		assert.Empty(t, parsedData.Transactions)
 	})
 
-	parsedData, _, err := Parse(block)
-	require.NoError(t, err)
+	t.Run("config transaction extracts meta-namespace policy", func(t *testing.T) {
+		t.Parallel()
+		configBytes, err := proto.Marshal(&protoblocktx.ConfigTransaction{
+			Version: 1, Envelope: []byte("config_envelope_data"),
+		})
+		require.NoError(t, err)
+		env := createEnvelope(t,
+			&common.ChannelHeader{Type: int32(common.HeaderType_CONFIG)},
+			configBytes,
+		)
+		block := buildBlock(t, blockSpec{
+			num:       0,
+			envelopes: []*common.Envelope{env},
+			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+		})
+		parsedData, _, err := Parse(block)
+		require.NoError(t, err)
+		assert.Len(t, parsedData.Policies, 1)
+		assert.Equal(t, committypes.MetaNamespaceID, parsedData.Policies[0].Namespace)
+	})
 
-	assert.Len(t, parsedData.Policies, 1)
-	assert.Equal(t, committypes.MetaNamespaceID, parsedData.Policies[0].Namespace)
-}
-
-// TestParseInvalidTransaction verifies that transactions with non-COMMITTED
-// validation codes are stored (not skipped), while truly unparseable envelopes
-// (MALFORMED_BAD_ENVELOPE) are silently dropped.
-func TestParseInvalidTransaction(t *testing.T) {
-	t.Parallel()
-	// Build a valid envelope containing a MESSAGE tx with a recognisable tx_id.
-	validEnv := createEnvelope(t,
-		&common.ChannelHeader{
-			Type: int32(common.HeaderType_MESSAGE),
-			TxId: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
-		},
-		[]byte("malformed-tx-data"), // makes UnmarshalTx fail
-	)
-	validEnvBytes, err := proto.Marshal(validEnv)
-	require.NoError(t, err)
-
-	block := &common.Block{
-		Header: &common.BlockHeader{Number: 42},
-		Data: &common.BlockData{
-			Data: [][]byte{
-				[]byte("completely_invalid_envelope"), // MALFORMED_BAD_ENVELOPE
-				validEnvBytes,                         // REJECTED_MVCC_CONFLICT
+	// non-COMMITTED tx is stored; unparseable envelope (MALFORMED_BAD_ENVELOPE) is dropped.
+	t.Run("non-committed tx stored, bad envelope dropped", func(t *testing.T) {
+		t.Parallel()
+		validEnv := createEnvelope(t,
+			&common.ChannelHeader{
+				Type: int32(common.HeaderType_MESSAGE),
+				TxId: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
 			},
-		},
-		Metadata: &common.BlockMetadata{
-			Metadata: [][]byte{
-				{},
-				{},
-				{
-					byte(protoblocktx.Status_COMMITTED),             // tx 0 — bad envelope
-					byte(protoblocktx.Status_ABORTED_MVCC_CONFLICT), // tx 1 — invalid but parseable
+			[]byte("malformed-tx-data"), // makes UnmarshalTx fail
+		)
+		validEnvBytes, err := proto.Marshal(validEnv)
+		require.NoError(t, err)
+
+		block := &common.Block{
+			Header: &common.BlockHeader{Number: 42},
+			Data: &common.BlockData{
+				Data: [][]byte{
+					[]byte("completely_invalid_envelope"), // MALFORMED_BAD_ENVELOPE — dropped
+					validEnvBytes,                         // ABORTED_MVCC_CONFLICT — stored
 				},
 			},
-		},
-	}
-
-	parsedData, _, err := Parse(block)
-	require.NoError(t, err)
-
-	// tx 0 has a bad envelope — no tx_id can be extracted, must be dropped.
-	// tx 1 has a valid envelope with no valid rwsets — stored as minimal record.
-	require.Len(t, parsedData.Transactions, 1)
-	tx := parsedData.Transactions[0]
-	assert.Equal(t, uint64(1), tx.TxNum)
-	assert.Equal(t, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", tx.TxID)
-	assert.Equal(t, protoblocktx.Status_ABORTED_MVCC_CONFLICT, tx.ValidationCode)
-	assert.Empty(t, tx.Namespaces)
-}
-
-// TestParseInvalidTxNotStoredForCommitted verifies that committed txns with
-// unparseable rwsets are NOT stored (they indicate a bug in the pipeline).
-func TestParseInvalidTxNotStoredForCommitted(t *testing.T) {
-	t.Parallel()
-	env := createEnvelope(t,
-		&common.ChannelHeader{
-			Type: int32(common.HeaderType_MESSAGE),
-			TxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-		},
-		[]byte("malformed-tx-data"),
-	)
-	block := buildBlock(t, blockSpec{
-		num:       43,
-		envelopes: []*common.Envelope{env},
-		statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+			Metadata: &common.BlockMetadata{
+				Metadata: [][]byte{
+					{},
+					{},
+					{
+						byte(protoblocktx.Status_COMMITTED),             // tx 0 — bad envelope
+						byte(protoblocktx.Status_ABORTED_MVCC_CONFLICT), // tx 1 — invalid but parseable
+					},
+				},
+			},
+		}
+		parsedData, _, err := Parse(block)
+		require.NoError(t, err)
+		// tx 0 has a bad envelope — no tx_id can be extracted, must be dropped.
+		// tx 1 has a valid envelope with no valid rwsets — stored as minimal record.
+		require.Len(t, parsedData.Transactions, 1)
+		tx := parsedData.Transactions[0]
+		assert.Equal(t, uint64(1), tx.TxNum)
+		assert.Equal(t, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", tx.TxID)
+		assert.Equal(t, protoblocktx.Status_ABORTED_MVCC_CONFLICT, tx.ValidationCode)
+		assert.Empty(t, tx.Namespaces)
 	})
 
-	parsedData, _, err := Parse(block)
-	require.NoError(t, err)
-	assert.Empty(t, parsedData.Transactions, "committed tx with bad rwset must not be stored")
+	// committed txns with unparseable rwsets are NOT stored (indicate a pipeline bug).
+	t.Run("committed tx with bad rwset is not stored", func(t *testing.T) {
+		t.Parallel()
+		env := createEnvelope(t,
+			&common.ChannelHeader{
+				Type: int32(common.HeaderType_MESSAGE),
+				TxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+			[]byte("malformed-tx-data"),
+		)
+		block := buildBlock(t, blockSpec{
+			num:       43,
+			envelopes: []*common.Envelope{env},
+			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+		})
+		parsedData, _, err := Parse(block)
+		require.NoError(t, err)
+		assert.Empty(t, parsedData.Transactions, "committed tx with bad rwset must not be stored")
+	})
 }
 
 // Helper functions
