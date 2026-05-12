@@ -32,10 +32,6 @@ workers:
   writer_count: 4
 
 server:
-  grpc:
-    endpoint:
-      host: 127.0.0.1
-      port: 7051
   rest:
     endpoint:
       host: 127.0.0.1

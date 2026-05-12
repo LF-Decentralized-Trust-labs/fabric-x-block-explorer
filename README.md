@@ -7,7 +7,7 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 - Go 1.26+
 - Docker with either `docker compose` or `docker-compose` available (for `make run` / DB tests)
 - `curl` and `python3` for `make smoke-live`
-- Access to a running Fabric-X sidecar (gRPC) and a PostgreSQL instance
+- Access to a running Fabric-X sidecar and a PostgreSQL instance
 
 ## Configuration
 
@@ -20,7 +20,7 @@ Explorer reads a YAML config file (for example `config.yaml`) matching the struc
 - `sidecar.channel_id`, `sidecar.start_block`, `sidecar.end_block`, `sidecar.max_reconnect_wait`, `sidecar.retry`
 - `buffer.raw_channel_size`, `buffer.proc_channel_size`
 - `workers.processor_count`, `workers.writer_count`
-- `server.rest.endpoint`: REST bind host/port
+- `server.rest.endpoint`: REST bind address (host/port)
 - `server.rest.read_header_timeout`, `server.rest.default_tx_limit`
 
 A working example is in `config.local.yaml`.
@@ -53,7 +53,7 @@ make run-down
 
 ```bash
 # Recreate explorer + DB, wait for REST readiness,
-# call representative live APIs, print results, and fail on errors.
+# call all REST endpoints, print results, and fail on errors.
 make smoke-live
 
 # Optional helpers
@@ -72,6 +72,8 @@ The REST server is defined in `pkg/api/rest.go`. Endpoints:
 - `GET /blocks/{block_num}?tx_limit=&tx_offset=` – block detail with paginated transactions
 - `GET /transactions/{tx_id}` – transaction detail by tx ID (hex string)
 - `GET /namespaces/{namespace}/policies` – namespace policies with decoded fields
+- `GET /openapi.yaml` – OpenAPI 3.0 specification
+- `GET /docs` – interactive Swagger UI
 
 All responses are JSON with native Go types defined in `pkg/api/types.go`.
 
@@ -98,4 +100,4 @@ make lint
 make smoke-live
 ```
 
-Unit tests for the API layer live under `pkg/api/`.
+Policy decoder tests live under `pkg/api/`.

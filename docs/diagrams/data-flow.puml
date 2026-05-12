@@ -79,9 +79,7 @@ database "PostgreSQL  :5433\npkg/db/schema.sql  +  pkg/db/sqlc/ (generated)\n\nb
 rectangle "API Layer" as PKG_API #FFF8F0 {
   component "**Service**\nEntry point that wires all components together\nManages lifecycle — starts pipeline and API servers\nShuts everything down cleanly on any fatal error" as svc
 
-  component "**gRPC API**\nExposes all query operations over gRPC\nDecodes stored policy data into human-readable expressions\nServes block, transaction, and namespace queries" as grpc
-
-  component "**REST API**\nExposes the same operations over HTTP\nDelegates all logic to the gRPC handlers\nReturns JSON responses; maps errors to HTTP status codes" as rest
+  component "**REST API**\nExposes all query operations over HTTP/JSON\nDecodes stored policy data into human-readable expressions\nServes block, transaction, and namespace queries\nMaps errors to appropriate HTTP status codes" as rest
 
   component "**API Docs**\nServes the OpenAPI specification\nProvides an interactive Swagger UI for browsing and testing the API" as swagger
 }
@@ -89,7 +87,6 @@ rectangle "API Layer" as PKG_API #FFF8F0 {
 ' ─────────────────────────────────────────────────────────────
 ' Clients
 ' ─────────────────────────────────────────────────────────────
-actor "gRPC clients\n:7051" as grpcclient
 actor "HTTP clients\n:8080 / browser" as httpclient
 
 ' ─────────────────────────────────────────────────────────────
@@ -107,11 +104,9 @@ writer    -down-> pg         : pgx batch txn
 
 pg        -down-> svc        : pgxpool (read queries, sqlc)
 
-svc       -down-> grpc
 svc       -down-> rest
 svc       -down-> swagger
 
-grpcclient -up-> grpc
 httpclient -up-> rest
 httpclient -up-> swagger
 

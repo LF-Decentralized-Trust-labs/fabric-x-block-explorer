@@ -30,9 +30,9 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetBlockHeightResponse"
+                $ref: "#/components/schemas/BlockHeightResponse"
               example:
-                height: "50"
+                height: 50
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -84,8 +84,8 @@ paths:
 
   /blocks/{block_num}:
     get:
-      summary: Get block detail
-      operationId: getBlockDetail
+      summary: Get block by number
+      operationId: getBlockByNumber
       tags: [Blocks]
       parameters:
         - name: block_num
@@ -117,7 +117,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/BlockDetail"
+                $ref: "#/components/schemas/Block"
         "400":
           $ref: "#/components/responses/BadRequest"
         "404":
@@ -144,7 +144,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TxDetail"
+                $ref: "#/components/schemas/Transaction"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
@@ -169,45 +169,40 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/GetNamespacePoliciesResponse"
+                $ref: "#/components/schemas/NamespacePoliciesResponse"
         "500":
           $ref: "#/components/responses/InternalError"
 
 components:
   schemas:
-    # ---- Block Height ----
 
-    GetBlockHeightResponse:
+    BlockHeightResponse:
       type: object
       properties:
         height:
-          type: string
-          description: Current block height (int64 serialised as string by protojson)
-          example: "50"
-
-    # ---- List Blocks ----
+          type: integer
+          format: int64
+          example: 50
 
     BlockSummary:
       type: object
       properties:
-        blockNum:
-          type: string
-          description: Block number (int64 serialised as string)
-          example: "2"
-        txCount:
+        block_num:
+          type: integer
+          format: int64
+          example: 2
+        tx_count:
           type: integer
           format: int32
           example: 1024
-        previousHash:
+        previous_hash:
           type: string
           format: byte
           description: Base64-encoded previous block hash
-          example: "VjHXD80z52vcS6AI..."
-        dataHash:
+        data_hash:
           type: string
           format: byte
           description: Base64-encoded data hash
-          example: "cD0gm8WHPcFed5I4..."
 
     ListBlocksResponse:
       type: object
@@ -217,55 +212,42 @@ components:
           items:
             $ref: "#/components/schemas/BlockSummary"
 
-    # ---- Block Detail ----
-
-    BlockDetail:
+    Block:
       type: object
       properties:
-        blockNum:
-          type: string
-          description: Block number (int64 serialised as string)
-          example: "2"
-        txCount:
+        block_num:
+          type: integer
+          format: int64
+          example: 2
+        tx_count:
           type: integer
           format: int32
           example: 3
-        previousHash:
+        previous_hash:
           type: string
           format: byte
           description: Base64-encoded previous block hash
-        dataHash:
+        data_hash:
           type: string
           format: byte
           description: Base64-encoded data hash
         transactions:
           type: array
           items:
-            $ref: "#/components/schemas/TxDetail"
+            $ref: "#/components/schemas/Transaction"
 
-    # ---- Transaction Detail ----
-
-    TxDetail:
+    Transaction:
       type: object
       properties:
-        blockNum:
-          type: string
-          description: Block number (int64 serialised as string)
-          example: "2"
-        txNum:
-          type: string
-          description: Transaction index within the block (int64 serialised as string)
-          example: "0"
-        txId:
+        tx_id:
           type: string
           description: Hex-encoded transaction ID
           example: "3a4f9c1d..."
-        validationCode:
-          type: integer
-          format: int32
-          description: Fabric peer validation code (0 = VALID)
-          example: 0
-        blindWrites:
+        validation_code:
+          type: string
+          description: Fabric validation status (e.g. VALID, MVCC_READ_CONFLICT)
+          example: "VALID"
+        blind_writes:
           type: array
           items:
             $ref: "#/components/schemas/BlindWriteRow"
@@ -273,11 +255,11 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/EndorsementRow"
-        readWrites:
+        read_writes:
           type: array
           items:
             $ref: "#/components/schemas/ReadWriteRow"
-        readsOnly:
+        reads_only:
           type: array
           items:
             $ref: "#/components/schemas/ReadOnlyRow"
@@ -285,9 +267,6 @@ components:
     BlindWriteRow:
       type: object
       properties:
-        nsId:
-          type: string
-          example: "mycc"
         key:
           type: string
           format: byte
@@ -300,17 +279,14 @@ components:
     EndorsementRow:
       type: object
       properties:
-        nsId:
-          type: string
-          example: "mycc"
         endorsement:
           type: string
           format: byte
           description: Base64-encoded endorsement bytes
-        mspId:
+        msp_id:
           type: string
           nullable: true
-          example: "org"
+          example: "Org1MSP"
         identity:
           type: string
           format: byte
@@ -319,17 +295,15 @@ components:
     ReadWriteRow:
       type: object
       properties:
-        nsId:
-          type: string
-          example: "mycc"
         key:
           type: string
           format: byte
           description: Base64-encoded key
-        readVersion:
-          type: string
+        read_version:
+          type: integer
+          format: int64
           nullable: true
-          description: Read version (int64 serialised as string); absent when not set
+          description: Read version; absent when not set
         value:
           type: string
           format: byte
@@ -338,19 +312,15 @@ components:
     ReadOnlyRow:
       type: object
       properties:
-        nsId:
-          type: string
-          example: "mycc"
         key:
           type: string
           format: byte
           description: Base64-encoded key
         version:
-          type: string
+          type: integer
+          format: int64
           nullable: true
-          description: Version (int64 serialised as string); absent when not set
-
-    # ---- Namespace Policies ----
+          description: Version; absent when not set
 
     NamespacePolicyRow:
       type: object
@@ -359,33 +329,33 @@ components:
           type: string
           example: "_meta"
         version:
-          type: string
-          description: Policy version (int64 serialised as string)
-          example: "0"
+          type: integer
+          format: int64
+          example: 0
         policy:
           type: string
           description: Human-readable policy expression
-          example: "MAJORITY(Admins)"
+          example: "1-of(Org1MSP.peer)"
         certificates:
           type: array
-          description: PEM-encoded X.509 certificates associated with the policy
+          description: PEM-encoded X.509 certificates
           items:
             type: string
-        mspIds:
+        msp_ids:
           type: array
           items:
             type: string
-          example: ["org"]
+          example: ["Org1MSP", "OrdererMSP"]
         endpoints:
           type: array
           items:
             type: string
           example: ["localhost:7050"]
-        hashAlgorithm:
+        hash_algorithm:
           type: string
           example: "SHA256"
 
-    GetNamespacePoliciesResponse:
+    NamespacePoliciesResponse:
       type: object
       properties:
         policies:
