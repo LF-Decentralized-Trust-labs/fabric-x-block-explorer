@@ -32,16 +32,32 @@ type (
 		Number       uint64
 		PreviousHash []byte
 		DataHash     []byte
+		BlockHash    []byte
+		BlockSize    int
+		CreatedAt    *int64 // Unix timestamp in nanoseconds
 	}
 )
 
 type (
 	// TxRecord groups all data for a single transaction within a block.
 	TxRecord struct {
-		TxNum          uint64
-		TxID           string
-		ValidationCode protoblocktx.Status
-		Namespaces     []TxNamespaceRecord
+		TxNum                  uint64
+		TxID                   string
+		ValidationCode         protoblocktx.Status
+		TxType                 *int32
+		ChaincodeName          *string
+		CreatorMspID           *string
+		CreatorIDBytes         []byte
+		CreatorNonce           []byte
+		EnvelopeSignature      []byte
+		ChaincodeProposalInput []byte
+		TxResponseStatus       *int32
+		TxResponseMessage      *string
+		TxResponsePayload      []byte
+		PayloadProposalHash    []byte
+		PayloadExtension       []byte
+		CreatedAt              *int64 // Unix timestamp in nanoseconds
+		Namespaces             []TxNamespaceRecord
 	}
 
 	// TxNamespaceRecord holds all reads, writes, and endorsements for one (tx, namespace) pair.

@@ -9,10 +9,13 @@ import (
 )
 
 type Block struct {
-	BlockNum     int64  `json:"block_num"`
-	TxCount      int32  `json:"tx_count"`
-	PreviousHash []byte `json:"previous_hash"`
-	DataHash     []byte `json:"data_hash"`
+	BlockNum     int64            `json:"block_num"`
+	TxCount      int32            `json:"tx_count"`
+	PreviousHash []byte           `json:"previous_hash"`
+	DataHash     []byte           `json:"data_hash"`
+	BlockHash    []byte           `json:"block_hash"`
+	BlockSize    pgtype.Int4      `json:"block_size"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
 }
 
 type NamespacePolicy struct {
@@ -22,16 +25,30 @@ type NamespacePolicy struct {
 }
 
 type Transaction struct {
-	BlockNum       int64  `json:"block_num"`
-	TxNum          int64  `json:"tx_num"`
-	TxID           []byte `json:"tx_id"`
-	ValidationCode int16  `json:"validation_code"`
+	BlockNum               int64            `json:"block_num"`
+	TxNum                  int64            `json:"tx_num"`
+	TxID                   []byte           `json:"tx_id"`
+	ValidationCode         int16            `json:"validation_code"`
+	TxType                 pgtype.Int2      `json:"tx_type"`
+	ChaincodeName          pgtype.Text      `json:"chaincode_name"`
+	CreatorMspID           pgtype.Text      `json:"creator_msp_id"`
+	CreatorIDBytes         []byte           `json:"creator_id_bytes"`
+	CreatorNonce           []byte           `json:"creator_nonce"`
+	EnvelopeSignature      []byte           `json:"envelope_signature"`
+	ChaincodeProposalInput []byte           `json:"chaincode_proposal_input"`
+	TxResponseStatus       pgtype.Int4      `json:"tx_response_status"`
+	TxResponseMessage      pgtype.Text      `json:"tx_response_message"`
+	TxResponsePayload      []byte           `json:"tx_response_payload"`
+	PayloadProposalHash    []byte           `json:"payload_proposal_hash"`
+	PayloadExtension       []byte           `json:"payload_extension"`
+	CreatedAt              pgtype.Timestamp `json:"created_at"`
 }
 
 type TxBlindWrite struct {
 	BlockNum int64  `json:"block_num"`
 	TxNum    int64  `json:"tx_num"`
 	NsID     string `json:"ns_id"`
+	SeqNum   int32  `json:"seq_num"`
 	Key      []byte `json:"key"`
 	Value    []byte `json:"value"`
 }
@@ -40,6 +57,7 @@ type TxEndorsement struct {
 	BlockNum    int64       `json:"block_num"`
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Endorsement []byte      `json:"endorsement"`
 	MspID       pgtype.Text `json:"msp_id"`
 	Identity    []byte      `json:"identity"`
@@ -56,6 +74,7 @@ type TxReadWrite struct {
 	BlockNum    int64       `json:"block_num"`
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Key         []byte      `json:"key"`
 	ReadVersion pgtype.Int8 `json:"read_version"`
 	Value       []byte      `json:"value"`
@@ -65,6 +84,7 @@ type TxReadsOnly struct {
 	BlockNum int64       `json:"block_num"`
 	TxNum    int64       `json:"tx_num"`
 	NsID     string      `json:"ns_id"`
+	SeqNum   int32       `json:"seq_num"`
 	Key      []byte      `json:"key"`
 	Version  pgtype.Int8 `json:"version"`
 }

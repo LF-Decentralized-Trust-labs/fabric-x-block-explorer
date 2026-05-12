@@ -15,7 +15,7 @@ const getReadsOnlyByBlockTxRange = `-- name: GetReadsOnlyByBlockTxRange :many
 SELECT tx_num, ns_id, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
-ORDER BY tx_num, ns_id, key
+ORDER BY tx_num, ns_id, seq_num
 `
 
 type GetReadsOnlyByBlockTxRangeParams struct {
@@ -60,7 +60,7 @@ const getReadsOnlyByTx = `-- name: GetReadsOnlyByTx :many
 SELECT ns_id, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num = $2
-ORDER BY ns_id, key
+ORDER BY ns_id, seq_num
 `
 
 type GetReadsOnlyByTxParams struct {

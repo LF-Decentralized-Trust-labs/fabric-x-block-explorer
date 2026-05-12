@@ -7,10 +7,12 @@ package dbsqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getBlock = `-- name: GetBlock :one
-SELECT block_num, tx_count, previous_hash, data_hash
+SELECT block_num, tx_count, previous_hash, data_hash, block_hash, block_size, created_at
 FROM blocks
 WHERE block_num = $1
 `
@@ -23,6 +25,9 @@ func (q *Queries) GetBlock(ctx context.Context, blockNum int64) (Block, error) {
 		&i.TxCount,
 		&i.PreviousHash,
 		&i.DataHash,
+		&i.BlockHash,
+		&i.BlockSize,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -40,16 +45,19 @@ func (q *Queries) GetBlockHeight(ctx context.Context) (interface{}, error) {
 }
 
 const insertBlock = `-- name: InsertBlock :exec
-INSERT INTO blocks (block_num, tx_count, previous_hash, data_hash)
-VALUES ($1, $2, $3, $4)
+INSERT INTO blocks (block_num, tx_count, previous_hash, data_hash, block_hash, block_size, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (block_num) DO NOTHING
 `
 
 type InsertBlockParams struct {
-	BlockNum     int64  `json:"block_num"`
-	TxCount      int32  `json:"tx_count"`
-	PreviousHash []byte `json:"previous_hash"`
-	DataHash     []byte `json:"data_hash"`
+	BlockNum     int64            `json:"block_num"`
+	TxCount      int32            `json:"tx_count"`
+	PreviousHash []byte           `json:"previous_hash"`
+	DataHash     []byte           `json:"data_hash"`
+	BlockHash    []byte           `json:"block_hash"`
+	BlockSize    pgtype.Int4      `json:"block_size"`
+	CreatedAt    pgtype.Timestamp `json:"created_at"`
 }
 
 func (q *Queries) InsertBlock(ctx context.Context, arg InsertBlockParams) error {
@@ -58,12 +66,15 @@ func (q *Queries) InsertBlock(ctx context.Context, arg InsertBlockParams) error 
 		arg.TxCount,
 		arg.PreviousHash,
 		arg.DataHash,
+		arg.BlockHash,
+		arg.BlockSize,
+		arg.CreatedAt,
 	)
 	return err
 }
 
 const listBlocks = `-- name: ListBlocks :many
-SELECT block_num, tx_count, previous_hash, data_hash
+SELECT block_num, tx_count, previous_hash, data_hash, block_hash, block_size, created_at
 FROM blocks
 WHERE block_num >= $1 AND block_num <= $2
 ORDER BY block_num
@@ -96,6 +107,9 @@ func (q *Queries) ListBlocks(ctx context.Context, arg ListBlocksParams) ([]Block
 			&i.TxCount,
 			&i.PreviousHash,
 			&i.DataHash,
+			&i.BlockHash,
+			&i.BlockSize,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

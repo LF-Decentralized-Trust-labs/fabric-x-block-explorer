@@ -12,8 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/hyperledger/fabric-x-committer/utils/connection"
-
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/api"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 )
@@ -37,7 +35,7 @@ func VersionCmd() *cobra.Command {
 	}
 }
 
-// StartExplorerCMD starts the block explorer API service (gRPC + REST).
+// StartExplorerCMD starts the block explorer REST API service.
 func StartExplorerCMD(use string) *cobra.Command {
 	var configPath string
 	cmd := &cobra.Command{
@@ -57,7 +55,7 @@ func StartExplorerCMD(use string) *cobra.Command {
 			defer cmd.Printf("%s ended\n", explorerName)
 
 			svc := api.New(cfg)
-			return connection.StartService(cmd.Context(), svc, cfg.Server.GRPC)
+			return svc.Run(cmd.Context())
 		},
 	}
 	cmd.Flags().StringVarP(&configPath, "config", "c", "config.yaml", "path to config file")

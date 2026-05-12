@@ -15,7 +15,7 @@ const getEndorsementsByBlockTxRange = `-- name: GetEndorsementsByBlockTxRange :m
 SELECT tx_num, ns_id, endorsement, msp_id, identity
 FROM tx_endorsements
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
-ORDER BY tx_num, ns_id, endorsement
+ORDER BY tx_num, ns_id, seq_num
 `
 
 type GetEndorsementsByBlockTxRangeParams struct {
@@ -62,7 +62,7 @@ const getEndorsementsByTx = `-- name: GetEndorsementsByTx :many
 SELECT ns_id, endorsement, msp_id, identity
 FROM tx_endorsements
 WHERE block_num = $1 AND tx_num = $2
-ORDER BY ns_id, endorsement
+ORDER BY ns_id, seq_num
 `
 
 type GetEndorsementsByTxParams struct {

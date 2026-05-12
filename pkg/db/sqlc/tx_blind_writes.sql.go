@@ -13,7 +13,7 @@ const getBlindWritesByBlockTxRange = `-- name: GetBlindWritesByBlockTxRange :man
 SELECT tx_num, ns_id, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
-ORDER BY tx_num, ns_id, key
+ORDER BY tx_num, ns_id, seq_num
 `
 
 type GetBlindWritesByBlockTxRangeParams struct {
@@ -58,7 +58,7 @@ const getBlindWritesByTx = `-- name: GetBlindWritesByTx :many
 SELECT ns_id, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num = $2
-ORDER BY ns_id, key
+ORDER BY ns_id, seq_num
 `
 
 type GetBlindWritesByTxParams struct {

@@ -15,7 +15,7 @@ const getReadWritesByBlockTxRange = `-- name: GetReadWritesByBlockTxRange :many
 SELECT tx_num, ns_id, key, read_version, value
 FROM tx_read_writes
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
-ORDER BY tx_num, ns_id, key
+ORDER BY tx_num, ns_id, seq_num
 `
 
 type GetReadWritesByBlockTxRangeParams struct {
@@ -62,7 +62,7 @@ const getReadWritesByTx = `-- name: GetReadWritesByTx :many
 SELECT ns_id, key, read_version, value
 FROM tx_read_writes
 WHERE block_num = $1 AND tx_num = $2
-ORDER BY ns_id, key
+ORDER BY ns_id, seq_num
 `
 
 type GetReadWritesByTxParams struct {

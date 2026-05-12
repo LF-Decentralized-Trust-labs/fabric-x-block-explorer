@@ -1,12 +1,12 @@
 # Fabric-X Block Explorer
 
-A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric sidecar, writes indexed data into PostgreSQL, and exposes both gRPC and REST APIs for querying blocks, transactions, and namespace policies.
+A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric sidecar, writes indexed data into PostgreSQL, and exposes a REST API for querying blocks, transactions, and namespace policies.
 
 ## Requirements
 
 - Go 1.26+
 - Docker with either `docker compose` or `docker-compose` available (for `make run` / DB tests)
-- `grpcurl`, `curl`, and `python3` for `make smoke-live`
+- `curl` and `python3` for `make smoke-live`
 - Access to a running Fabric-X sidecar (gRPC) and a PostgreSQL instance
 
 ## Configuration
@@ -20,7 +20,6 @@ Explorer reads a YAML config file (for example `config.yaml`) matching the struc
 - `sidecar.channel_id`, `sidecar.start_block`, `sidecar.end_block`, `sidecar.max_reconnect_wait`, `sidecar.retry`
 - `buffer.raw_channel_size`, `buffer.proc_channel_size`
 - `workers.processor_count`, `workers.writer_count`
-- `server.grpc.endpoint`: gRPC bind host/port
 - `server.rest.endpoint`: REST bind host/port
 - `server.rest.read_header_timeout`, `server.rest.default_tx_limit`
 
@@ -38,7 +37,7 @@ cp config.local.yaml config.yaml   # or point --config to config.local.yaml
 go run ./cmd/explorer start --config config.yaml
 ```
 
-The REST API listens on the host/port configured under `server.rest.endpoint` (in `config.local.yaml` this is `127.0.0.1:8080`). The gRPC API listens on `server.grpc.endpoint` (default `127.0.0.1:7051`).
+The REST API listens on the host/port configured under `server.rest.endpoint` (in `config.local.yaml` this is `127.0.0.1:8080`).
 
 ### With Docker Compose
 
@@ -53,22 +52,20 @@ make run-down
 ### Live smoke test via Make
 
 ```bash
-# Recreate explorer + DB, wait for REST/gRPC readiness,
+# Recreate explorer + DB, wait for REST readiness,
 # call representative live APIs, print results, and fail on errors.
 make smoke-live
 
 # Optional helpers
 make live-up
 make wait-rest
-make wait-grpc
 make smoke-rest
-make smoke-grpc
 make live-down
 ```
 
 ## REST API
 
-The REST server is defined in `pkg/api/rest.go` and delegates directly to the gRPC service. Paths:
+The REST server is defined in `pkg/api/rest.go`. Endpoints:
 
 - `GET /blocks/height` – returns the current stored block height
 - `GET /blocks?from=&to=&limit=&offset=` – list block summaries in a range
@@ -76,24 +73,7 @@ The REST server is defined in `pkg/api/rest.go` and delegates directly to the gR
 - `GET /transactions/{tx_id}` – transaction detail by tx ID (hex string)
 - `GET /namespaces/{namespace}/policies` – namespace policies with decoded fields
 
-All responses are JSON produced via `protojson` with `EmitUnpopulated: true`.
-
-## gRPC API
-
-The gRPC service is defined in `api/proto/explorer.proto` and implemented in `pkg/api/grpc.go`:
-
-- `GetBlockHeight(google.protobuf.Empty) -> GetBlockHeightResponse`
-- `ListBlocks(ListBlocksRequest) -> ListBlocksResponse`
-- `GetBlockDetail(GetBlockDetailRequest) -> BlockDetail`
-- `GetTransactionDetail(GetTxDetailRequest) -> TxDetail`
-- `GetNamespacePolicies(GetNamespacePoliciesRequest) -> GetNamespacePoliciesResponse`
-
-Run the server and then use `grpcurl`:
-
-```bash
-grpcurl -plaintext localhost:7051 list
-grpcurl -plaintext -d '{}' localhost:7051 explorerv1.BlockExplorerService.GetBlockHeight
-```
+All responses are JSON with native Go types defined in `pkg/api/types.go`.
 
 ## Tests and Lint
 

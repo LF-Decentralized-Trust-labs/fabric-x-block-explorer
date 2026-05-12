@@ -13,15 +13,9 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/reflection"
 
 	"github.com/hyperledger/fabric-x-committer/utils/channel"
-	"github.com/hyperledger/fabric-x-committer/utils/connection"
 
-	explorerv1 "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/api/proto"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/blockpipeline"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db"
@@ -29,39 +23,27 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/sidecarstream"
 )
 
-// Service serves the block explorer gRPC and REST APIs.
-// It implements connection.Service so it integrates with connection.StartService.
+// Service serves the block explorer REST API.
 type Service struct {
-	explorerv1.UnimplementedBlockExplorerServiceServer
-	config      *config.Config
-	querier     dbsqlc.Querier
-	ready       *channel.Ready
-	healthcheck *health.Server
+	config  *config.Config
+	querier dbsqlc.Querier
+	ready   *channel.Ready
 }
 
 // New creates a new explorer Service.
 func New(cfg *config.Config) *Service {
 	return &Service{
-		config:      cfg,
-		ready:       channel.NewReady(),
-		healthcheck: connection.DefaultHealthCheckService(),
+		config: cfg,
+		ready:  channel.NewReady(),
 	}
 }
 
-// WaitForReady implements connection.Service.
+// WaitForReady waits for the service to be ready.
 func (s *Service) WaitForReady(ctx context.Context) bool {
 	return s.ready.WaitForReady(ctx)
 }
 
-// RegisterService implements connection.Service — registers the gRPC server.
-func (s *Service) RegisterService(server *grpc.Server) {
-	explorerv1.RegisterBlockExplorerServiceServer(server, s)
-	healthgrpc.RegisterHealthServer(server, s.healthcheck)
-	reflection.Register(server)
-}
-
-// Run implements connection.Service — opens the DB pool, starts the block
-// ingestion pipeline, and runs the REST server.
+// Run opens the DB pool, starts the block ingestion pipeline, and runs the REST server.
 func (s *Service) Run(ctx context.Context) error {
 	pool, err := db.NewPostgres(ctx, db.Config{
 		Endpoints:       s.config.DB.Endpoints,

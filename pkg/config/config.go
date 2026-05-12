@@ -52,13 +52,12 @@ type WorkerConfig struct {
 	WriterCount    int `mapstructure:"writer_count"    yaml:"writer_count"`
 }
 
-// ServerConfig holds the API server configuration.
+// ServerConfig holds the REST API server configuration.
 type ServerConfig struct {
-	GRPC *connection.ServerConfig `mapstructure:"grpc" yaml:"grpc"`
-	REST RESTConfig               `mapstructure:"rest" yaml:"rest"`
+	REST RESTConfig `mapstructure:"rest" yaml:"rest"`
 }
 
-// RESTConfig holds the REST server endpoint.
+// RESTConfig holds the REST server endpoint and configuration.
 type RESTConfig struct {
 	Endpoint          connection.Endpoint `mapstructure:"endpoint" yaml:"endpoint"`
 	ReadHeaderTimeout time.Duration       `mapstructure:"read_header_timeout" yaml:"read_header_timeout"`

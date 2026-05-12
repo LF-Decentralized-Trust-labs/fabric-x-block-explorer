@@ -80,6 +80,9 @@ func (bw *BlockWriter) WriteProcessedBlock(ctx context.Context, pb *types.Proces
 		TxCount:      int32(len(pb.Data.Transactions)), //nolint:gosec // tx count fits in int32
 		PreviousHash: pb.BlockInfo.PreviousHash,
 		DataHash:     pb.BlockInfo.DataHash,
+		BlockHash:    pb.BlockInfo.BlockHash,
+		BlockSize:    util.Int32ToNullableInt4(pb.BlockInfo.BlockSize),
+		CreatedAt:    util.Int64ToNullableTimestamp(pb.BlockInfo.CreatedAt),
 	}); err != nil {
 		return err
 	}
@@ -168,10 +171,23 @@ func (p *batchParams) appendTx(blockNum uint64, txRec types.TxRecord) error {
 		return errors.Wrapf(err, "failed to decode tx_id %s", txRec.TxID)
 	}
 	p.txParams = append(p.txParams, dbsqlc.InsertTransactionParams{
-		BlockNum:       int64(blockNum),    //nolint:gosec // fits in int64
-		TxNum:          int64(txRec.TxNum), //nolint:gosec // fits in int64
-		TxID:           txIDBytes,
-		ValidationCode: int16(txRec.ValidationCode), //nolint:gosec // max status value is 115, fits in int16
+		BlockNum:               int64(blockNum),    //nolint:gosec // fits in int64
+		TxNum:                  int64(txRec.TxNum), //nolint:gosec // fits in int64
+		TxID:                   txIDBytes,
+		ValidationCode:         int16(txRec.ValidationCode), //nolint:gosec // max status value is 115, fits in int16
+		TxType:                 util.Int32PtrToNullableInt2(txRec.TxType),
+		ChaincodeName:          util.PtrToNullableString(txRec.ChaincodeName),
+		CreatorMspID:           util.PtrToNullableString(txRec.CreatorMspID),
+		CreatorIDBytes:         txRec.CreatorIDBytes,
+		CreatorNonce:           txRec.CreatorNonce,
+		EnvelopeSignature:      txRec.EnvelopeSignature,
+		ChaincodeProposalInput: txRec.ChaincodeProposalInput,
+		TxResponseStatus:       util.Int32PtrToNullableInt4(txRec.TxResponseStatus),
+		TxResponseMessage:      util.PtrToNullableString(txRec.TxResponseMessage),
+		TxResponsePayload:      txRec.TxResponsePayload,
+		PayloadProposalHash:    txRec.PayloadProposalHash,
+		PayloadExtension:       txRec.PayloadExtension,
+		CreatedAt:              util.Int64ToNullableTimestamp(txRec.CreatedAt),
 	})
 	for _, ns := range txRec.Namespaces {
 		p.appendNamespace(blockNum, txRec.TxNum, ns)
@@ -189,39 +205,43 @@ func (p *batchParams) appendNamespace(blockNum, txNum uint64, ns types.TxNamespa
 		NsID:      ns.NsID,
 		NsVersion: int64(ns.NsVersion), //nolint:gosec // fits in int64
 	})
-	for _, r := range ns.ReadsOnly {
+	for i, r := range ns.ReadsOnly {
 		p.readOnlyParams = append(p.readOnlyParams, dbsqlc.InsertReadOnlyParams{
 			BlockNum: bn,
 			TxNum:    tn,
 			NsID:     ns.NsID,
+			SeqNum:   int32(i),
 			Key:      r.Key,
 			Version:  util.PtrToNullableInt64(r.Version),
 		})
 	}
-	for _, rw := range ns.ReadWrites {
+	for i, rw := range ns.ReadWrites {
 		p.readWriteParams = append(p.readWriteParams, dbsqlc.InsertReadWriteParams{
 			BlockNum:    bn,
 			TxNum:       tn,
 			NsID:        ns.NsID,
+			SeqNum:      int32(i),
 			Key:         rw.Key,
 			ReadVersion: util.PtrToNullableInt64(rw.ReadVersion),
 			Value:       rw.Value,
 		})
 	}
-	for _, bw := range ns.BlindWrites {
+	for i, bw := range ns.BlindWrites {
 		p.blindWriteParams = append(p.blindWriteParams, dbsqlc.InsertBlindWriteParams{
 			BlockNum: bn,
 			TxNum:    tn,
 			NsID:     ns.NsID,
+			SeqNum:   int32(i),
 			Key:      bw.Key,
 			Value:    bw.Value,
 		})
 	}
-	for _, e := range ns.Endorsements {
+	for i, e := range ns.Endorsements {
 		p.endorseParams = append(p.endorseParams, dbsqlc.InsertTxEndorsementParams{
 			BlockNum:    bn,
 			TxNum:       tn,
 			NsID:        ns.NsID,
+			SeqNum:      int32(i),
 			Endorsement: e.Endorsement,
 			MspID:       util.PtrToNullableString(e.MspID),
 			Identity:    e.Identity,
