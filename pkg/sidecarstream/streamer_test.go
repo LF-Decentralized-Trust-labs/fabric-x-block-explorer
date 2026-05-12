@@ -45,36 +45,39 @@ func TestNewStreamer(t *testing.T) {
 		streamer.Close()
 	})
 
-	cases := []struct {
-		name      string
-		channelID string
-		startBlk  uint64
-		endBlk    uint64
-	}{
-		{"default range", "mychannel", 0, 1000},
-		{"specific range", "businesschannel", 100, 200},
-		{"large range", "ledger1", 500, 5000},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			cfg := config.SidecarConfig{
-				Connection: connection.ClientConfig{
-					Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
-				},
-				ChannelID: tc.channelID,
-				StartBlk:  tc.startBlk,
-				EndBlk:    tc.endBlk,
-			}
-			streamer, err := NewStreamer(cfg)
-			require.NoError(t, err)
-			require.NotNil(t, streamer)
-			assert.Equal(t, tc.channelID, streamer.channelID)
-			assert.Equal(t, int64(tc.startBlk), streamer.startBlk) //nolint:gosec
-			assert.Equal(t, tc.endBlk, streamer.endBlk)
-			streamer.Close()
-		})
-	}
+	t.Run("stores config fields", func(t *testing.T) {
+		t.Parallel()
+		cases := []struct {
+			name      string
+			channelID string
+			startBlk  uint64
+			endBlk    uint64
+		}{
+			{"default range", "mychannel", 0, 1000},
+			{"specific range", "businesschannel", 100, 200},
+			{"large range", "ledger1", 500, 5000},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				cfg := config.SidecarConfig{
+					Connection: connection.ClientConfig{
+						Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
+					},
+					ChannelID: tc.channelID,
+					StartBlk:  tc.startBlk,
+					EndBlk:    tc.endBlk,
+				}
+				streamer, err := NewStreamer(cfg)
+				require.NoError(t, err)
+				require.NotNil(t, streamer)
+				assert.Equal(t, tc.channelID, streamer.channelID)
+				assert.Equal(t, int64(tc.startBlk), streamer.startBlk) //nolint:gosec
+				assert.Equal(t, tc.endBlk, streamer.endBlk)
+				streamer.Close()
+			})
+		}
+	})
 }
 
 func TestStreamerClose(t *testing.T) {

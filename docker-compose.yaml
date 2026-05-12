@@ -1,0 +1,30 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: explorer
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  explorer:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7051:7051"
+      - "8080:8080"
+    # Allows the explorer to reach a sidecar running on the host machine.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["start"]

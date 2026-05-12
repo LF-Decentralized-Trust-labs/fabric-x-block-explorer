@@ -8,7 +8,6 @@ package db
 
 import (
 	"context"
-	_ "embed"
 	"testing"
 	"time"
 
@@ -19,9 +18,6 @@ import (
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
-
-//go:embed schema.sql
-var schemaSQL string
 
 // DatabaseTestEnv provides a test database environment.
 type DatabaseTestEnv struct {

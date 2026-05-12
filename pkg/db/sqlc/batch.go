@@ -18,9 +18,9 @@ var (
 )
 
 const insertBlindWrite = `-- name: InsertBlindWrite :batchexec
-INSERT INTO tx_blind_writes (block_num, tx_num, ns_id, key, value)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
+INSERT INTO tx_blind_writes (block_num, tx_num, ns_id, seq_num, key, value)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (block_num, tx_num, ns_id, seq_num) DO NOTHING
 `
 
 type InsertBlindWriteBatchResults struct {
@@ -33,6 +33,7 @@ type InsertBlindWriteParams struct {
 	BlockNum int64  `json:"block_num"`
 	TxNum    int64  `json:"tx_num"`
 	NsID     string `json:"ns_id"`
+	SeqNum   int32  `json:"seq_num"`
 	Key      []byte `json:"key"`
 	Value    []byte `json:"value"`
 }
@@ -44,6 +45,7 @@ func (q *Queries) InsertBlindWrite(ctx context.Context, arg []InsertBlindWritePa
 			a.BlockNum,
 			a.TxNum,
 			a.NsID,
+			a.SeqNum,
 			a.Key,
 			a.Value,
 		}
@@ -75,9 +77,9 @@ func (b *InsertBlindWriteBatchResults) Close() error {
 }
 
 const insertReadOnly = `-- name: InsertReadOnly :batchexec
-INSERT INTO tx_reads_only (block_num, tx_num, ns_id, key, version)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
+INSERT INTO tx_reads_only (block_num, tx_num, ns_id, seq_num, key, version)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (block_num, tx_num, ns_id, seq_num) DO NOTHING
 `
 
 type InsertReadOnlyBatchResults struct {
@@ -90,6 +92,7 @@ type InsertReadOnlyParams struct {
 	BlockNum int64       `json:"block_num"`
 	TxNum    int64       `json:"tx_num"`
 	NsID     string      `json:"ns_id"`
+	SeqNum   int32       `json:"seq_num"`
 	Key      []byte      `json:"key"`
 	Version  pgtype.Int8 `json:"version"`
 }
@@ -101,6 +104,7 @@ func (q *Queries) InsertReadOnly(ctx context.Context, arg []InsertReadOnlyParams
 			a.BlockNum,
 			a.TxNum,
 			a.NsID,
+			a.SeqNum,
 			a.Key,
 			a.Version,
 		}
@@ -132,9 +136,9 @@ func (b *InsertReadOnlyBatchResults) Close() error {
 }
 
 const insertReadWrite = `-- name: InsertReadWrite :batchexec
-INSERT INTO tx_read_writes (block_num, tx_num, ns_id, key, read_version, value)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (block_num, tx_num, ns_id, key) DO NOTHING
+INSERT INTO tx_read_writes (block_num, tx_num, ns_id, seq_num, key, read_version, value)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (block_num, tx_num, ns_id, seq_num) DO NOTHING
 `
 
 type InsertReadWriteBatchResults struct {
@@ -147,6 +151,7 @@ type InsertReadWriteParams struct {
 	BlockNum    int64       `json:"block_num"`
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Key         []byte      `json:"key"`
 	ReadVersion pgtype.Int8 `json:"read_version"`
 	Value       []byte      `json:"value"`
@@ -159,6 +164,7 @@ func (q *Queries) InsertReadWrite(ctx context.Context, arg []InsertReadWritePara
 			a.BlockNum,
 			a.TxNum,
 			a.NsID,
+			a.SeqNum,
 			a.Key,
 			a.ReadVersion,
 			a.Value,
@@ -191,8 +197,13 @@ func (b *InsertReadWriteBatchResults) Close() error {
 }
 
 const insertTransaction = `-- name: InsertTransaction :batchexec
-INSERT INTO transactions (block_num, tx_num, tx_id, validation_code)
-VALUES ($1, $2, $3, $4)
+INSERT INTO transactions (
+    block_num, tx_num, tx_id, validation_code, tx_type, chaincode_name,
+    creator_msp_id, creator_id_bytes, creator_nonce, envelope_signature,
+    chaincode_proposal_input, tx_response_status, tx_response_message,
+    tx_response_payload, payload_proposal_hash, payload_extension, created_at
+)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (block_num, tx_num) DO NOTHING
 `
 
@@ -203,10 +214,23 @@ type InsertTransactionBatchResults struct {
 }
 
 type InsertTransactionParams struct {
-	BlockNum       int64  `json:"block_num"`
-	TxNum          int64  `json:"tx_num"`
-	TxID           []byte `json:"tx_id"`
-	ValidationCode int16  `json:"validation_code"`
+	BlockNum               int64            `json:"block_num"`
+	TxNum                  int64            `json:"tx_num"`
+	TxID                   []byte           `json:"tx_id"`
+	ValidationCode         int16            `json:"validation_code"`
+	TxType                 pgtype.Int2      `json:"tx_type"`
+	ChaincodeName          pgtype.Text      `json:"chaincode_name"`
+	CreatorMspID           pgtype.Text      `json:"creator_msp_id"`
+	CreatorIDBytes         []byte           `json:"creator_id_bytes"`
+	CreatorNonce           []byte           `json:"creator_nonce"`
+	EnvelopeSignature      []byte           `json:"envelope_signature"`
+	ChaincodeProposalInput []byte           `json:"chaincode_proposal_input"`
+	TxResponseStatus       pgtype.Int4      `json:"tx_response_status"`
+	TxResponseMessage      pgtype.Text      `json:"tx_response_message"`
+	TxResponsePayload      []byte           `json:"tx_response_payload"`
+	PayloadProposalHash    []byte           `json:"payload_proposal_hash"`
+	PayloadExtension       []byte           `json:"payload_extension"`
+	CreatedAt              pgtype.Timestamp `json:"created_at"`
 }
 
 func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults {
@@ -217,6 +241,19 @@ func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransaction
 			a.TxNum,
 			a.TxID,
 			a.ValidationCode,
+			a.TxType,
+			a.ChaincodeName,
+			a.CreatorMspID,
+			a.CreatorIDBytes,
+			a.CreatorNonce,
+			a.EnvelopeSignature,
+			a.ChaincodeProposalInput,
+			a.TxResponseStatus,
+			a.TxResponseMessage,
+			a.TxResponsePayload,
+			a.PayloadProposalHash,
+			a.PayloadExtension,
+			a.CreatedAt,
 		}
 		batch.Queue(insertTransaction, vals...)
 	}
@@ -246,9 +283,9 @@ func (b *InsertTransactionBatchResults) Close() error {
 }
 
 const insertTxEndorsement = `-- name: InsertTxEndorsement :batchexec
-INSERT INTO tx_endorsements (block_num, tx_num, ns_id, endorsement, msp_id, identity)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (block_num, tx_num, ns_id, endorsement) DO NOTHING
+INSERT INTO tx_endorsements (block_num, tx_num, ns_id, seq_num, endorsement, msp_id, identity)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+ON CONFLICT (block_num, tx_num, ns_id, seq_num) DO NOTHING
 `
 
 type InsertTxEndorsementBatchResults struct {
@@ -261,6 +298,7 @@ type InsertTxEndorsementParams struct {
 	BlockNum    int64       `json:"block_num"`
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Endorsement []byte      `json:"endorsement"`
 	MspID       pgtype.Text `json:"msp_id"`
 	Identity    []byte      `json:"identity"`
@@ -273,6 +311,7 @@ func (q *Queries) InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorse
 			a.BlockNum,
 			a.TxNum,
 			a.NsID,
+			a.SeqNum,
 			a.Endorsement,
 			a.MspID,
 			a.Identity,

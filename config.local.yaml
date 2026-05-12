@@ -1,0 +1,44 @@
+database:
+  endpoints:
+    - host: localhost
+      port: 5433
+  user: yugabyte
+  password: yugabyte
+  dbname: explorer
+  max_conns: 20
+
+sidecar:
+  connection:
+    endpoint:
+      host: localhost
+      port: 4001
+    tls:
+      mode: none
+  channel_id: mychannel
+  start_block: 0
+  max_reconnect_wait: 30s
+  retry:
+    max_attempts: 0
+    initial_interval: 1s
+    max_interval: 30s
+    multiplier: 2.0
+
+buffer:
+  raw_channel_size: 500
+  proc_channel_size: 500
+
+workers:
+  processor_count: 4
+  writer_count: 4
+
+server:
+  grpc:
+    endpoint:
+      host: 127.0.0.1
+      port: 7051
+  rest:
+    endpoint:
+      host: 127.0.0.1
+      port: 8080
+    read_header_timeout: 10s
+    default_tx_limit: 50

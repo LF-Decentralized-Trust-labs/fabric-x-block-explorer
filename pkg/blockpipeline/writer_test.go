@@ -19,7 +19,7 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-func newPB(num uint64) *types.ProcessedBlock {
+func newProcessedBlock(num uint64) *types.ProcessedBlock {
 	return &types.ProcessedBlock{
 		Data:      &types.ParsedBlockData{},
 		BlockInfo: &types.BlockInfo{Number: num},
@@ -60,8 +60,7 @@ func TestBlockWriter(t *testing.T) {
 	})
 
 	t.Run("skips nil block", func(t *testing.T) {
-		// Sends nil then closes. If nil were NOT skipped, WriteProcessedBlock
-		// would be called and return "processed block is nil" — an error.
+		// A nil entry must be skipped; otherwise WriteProcessedBlock would error.
 		t.Parallel()
 		s := startBlockWriter(t.Context())
 		s.in <- nil
@@ -74,7 +73,7 @@ func TestBlockWriter(t *testing.T) {
 		// "no pool or conn available". BlockWriter must wrap it as "db write error".
 		t.Parallel()
 		s := startBlockWriter(t.Context())
-		s.in <- newPB(1)
+		s.in <- newProcessedBlock(1)
 		err := <-s.done
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "db write error")
