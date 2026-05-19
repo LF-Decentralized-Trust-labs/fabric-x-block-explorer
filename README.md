@@ -1,103 +1,149 @@
 # Fabric-X Block Explorer
 
-A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric sidecar, writes indexed data into PostgreSQL, and exposes a REST API for querying blocks, transactions, and namespace policies.
+A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric-X sidecar, writes indexed data into PostgreSQL, and exposes a REST API for querying blocks, transactions, and namespace policies.
 
 ## Requirements
 
 - Go 1.26+
 - Docker with either `docker compose` or `docker-compose` available (for `make run` / DB tests)
-- `curl` and `python3` for `make smoke-live`
+- `curl` and `python3` for smoke tests
 - Access to a running Fabric-X sidecar and a PostgreSQL instance
 
 ## Configuration
 
-Explorer reads a YAML config file (for example `config.yaml`) matching the structure in `pkg/config.Config`:
+The explorer reads a YAML config file passed via `--config`. A fully annotated example is in `config.local.yaml`. The top-level keys map to `pkg/config.Config`:
 
-- `database.endpoints[]`: host/port for PostgreSQL
-- `database.user`, `database.password`, `database.dbname`, `database.max_conns`
-- `database.max_conn_idle_time`, `database.max_conn_lifetime`, `database.retry`
-- `sidecar.connection.endpoint`: host/port for the Fabric-X sidecar
-- `sidecar.channel_id`, `sidecar.start_block`, `sidecar.end_block`, `sidecar.max_reconnect_wait`, `sidecar.retry`
-- `buffer.raw_channel_size`, `buffer.proc_channel_size`
-- `workers.processor_count`, `workers.writer_count`
-- `server.rest.endpoint`: REST bind address (host/port)
-- `server.rest.read_header_timeout`, `server.rest.default_tx_limit`
+### `database`
+| Field | Description |
+|---|---|
+| `endpoints[]` | PostgreSQL host/port pairs |
+| `user`, `password`, `dbname` | Connection credentials |
+| `max_conns` | Maximum connection pool size |
+| `max_conn_idle_time`, `max_conn_lifetime` | Pool eviction durations |
+| `retry` | Exponential back-off profile for initial connection |
+| `tls` | PostgreSQL TLS settings (`dbconn.DatabaseTLSConfig`) |
 
-A working example is in `config.local.yaml`.
+### `sidecar`
+| Field | Description |
+|---|---|
+| `connection.endpoint` | Fabric-X sidecar host/port |
+| `connection.retry` | gRPC-level retry policy (stream reconnection is automatic) |
+| `connection.tls.mode` | `""` or `"none"` (plaintext), `"tls"` (server-auth), `"mtls"` (mutual TLS) |
+| `connection.tls.ca_cert_paths[]` | CA cert(s) to verify the sidecar — required for `tls` and `mtls` |
+| `connection.tls.cert_path` | Client certificate — required for `mtls` |
+| `connection.tls.key_path` | Client private key — required for `mtls` |
+| `start_block` | Block number to begin streaming from (default `0`) |
+
+### `buffer`
+| Field | Description |
+|---|---|
+| `raw_channel_size` | Capacity of the raw-block channel between receiver and processor |
+| `proc_channel_size` | Capacity of the processed-block channel between processor and writer |
+
+### `workers`
+| Field | Description |
+|---|---|
+| `processor_count` | Number of block processor goroutines |
+| `writer_count` | Number of DB writer goroutines |
+
+### `server.rest`
+| Field | Description |
+|---|---|
+| `endpoint` | REST bind address — e.g. `127.0.0.1:8080` |
+| `read_header_timeout` | Maximum time to read request headers |
+| `read_timeout` | Maximum time to read the full request |
+| `write_timeout` | Maximum time to write a response |
+| `shutdown_timeout` | Graceful shutdown drain time |
+| `default_tx_limit` | Default page size for transactions in block detail responses |
 
 ## Running
 
 ### Local (dev)
 
 ```bash
-# From repo root
-cp config.local.yaml config.yaml   # or point --config to config.local.yaml
-
-# Start the explorer
-go run ./cmd/explorer start --config config.yaml
+# Start the explorer (requires a running sidecar and postgres)
+go run ./cmd/explorer start --config config.local.yaml
 ```
 
-The REST API listens on the host/port configured under `server.rest.endpoint` (in `config.local.yaml` this is `127.0.0.1:8080`).
+The REST API listens on the address configured under `server.rest.endpoint`.
 
 ### With Docker Compose
 
 ```bash
-# Build explorer image and start explorer + DB (sidecar must be running separately)
+# Start postgres + explorer (sidecar must be running separately)
 make run
 
 # Tear down
 make run-down
 ```
 
-### Live smoke test via Make
+### Self-contained live stack (committer + postgres + explorer)
 
 ```bash
-# Recreate explorer + DB, wait for REST readiness,
-# call all REST endpoints, print results, and fail on errors.
-make smoke-live
+# Build, start the full stack, run all smoke tests, then open Swagger UI in browser
+make swagger
 
-# Optional helpers
-make live-up
-make wait-rest
-make smoke-rest
-make live-down
+# Tear down the stack started by 'make swagger'
+make live-stop
+```
+
+### Individual stack helpers
+
+```bash
+make live-up      # Start the docker-compose stack in detached mode
+make live-down    # Stop and remove containers + volumes
+make wait-rest    # Block until the REST API is responding
+make smoke-rest   # Run the REST smoke-test suite only
+make smoke-live   # wait-rest + smoke-rest combined
 ```
 
 ## REST API
 
-The REST server is defined in `pkg/api/rest.go`. Endpoints:
+The REST server is defined in `pkg/api/rest.go`. All responses are JSON. Response types are defined in `pkg/api/types.go`.
 
-- `GET /blocks/height` – returns the current stored block height
-- `GET /blocks?from=&to=&limit=&offset=` – list block summaries in a range
-- `GET /blocks/{block_num}?tx_limit=&tx_offset=` – block detail with paginated transactions
-- `GET /transactions/{tx_id}` – transaction detail by tx ID (hex string)
-- `GET /namespaces/{namespace}/policies` – namespace policies with decoded fields
-- `GET /openapi.yaml` – OpenAPI 3.0 specification
-- `GET /docs` – interactive Swagger UI
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/blocks/height` | Current stored block height |
+| `GET` | `/blocks` | List block summaries (`from`, `to`, `limit`, `offset`) |
+| `GET` | `/blocks/{block_num}` | Block detail with transactions (`tx_limit`, `tx_offset`) |
+| `GET` | `/transactions/{tx_id}` | Transaction detail by hex tx ID |
+| `GET` | `/namespaces/policies` | Latest policy for **every** namespace in the DB |
+| `GET` | `/namespaces/{namespace}/policies` | All policy versions for a specific namespace, newest first |
+| `GET` | `/openapi.yaml` | OpenAPI 3.0 specification (server URL injected dynamically from request host) |
+| `GET` | `/docs` | Interactive Swagger UI |
 
-All responses are JSON with native Go types defined in `pkg/api/types.go`.
+CORS is enabled on all endpoints (`Access-Control-Allow-Origin: *`).
 
 ## Tests and Lint
 
 ```bash
-# Parser / util / config / pipeline / sidecar / workerpool (no DB)
+# Build the explorer binary
+make build
+
+# Parser / util / config / pipeline / sidecar (no DB required)
 make test-no-db
 
-# DB-backed tests (auto-starts local postgres container)
+# DB-backed unit tests (auto-starts a local postgres container)
 make test-requires-db
 
-# All packages (requires DB container)
+# All unit tests
 make test-all
 
-# SQLC generation and verification
+# Integration test against a live committer-test-node container
+make test-integration
+
+# Coverage report
+make coverage
+
+# SQLC codegen and verification
 make sqlc
 make check-sqlc
 
 # Lint
 make lint
 
-# End-to-end live smoke test
+# Full live smoke test (full stack, all endpoints)
 make smoke-live
 ```
 
-Policy decoder tests live under `pkg/api/`.
+Policy decoder tests live in `pkg/api/`. Configuration tests live in `pkg/config/`.
