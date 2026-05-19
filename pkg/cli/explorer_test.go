@@ -29,7 +29,6 @@ sidecar:
     endpoint:
       host: localhost
       port: 7052
-  channel_id: mychannel
 workers:
   processor_count: 4
   writer_count: 4

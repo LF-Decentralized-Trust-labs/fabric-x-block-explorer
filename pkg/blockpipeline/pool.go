@@ -15,7 +15,6 @@ import (
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-x-committer/utils/channel"
-	"github.com/hyperledger/fabric-x-committer/utils/connection"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db"
@@ -33,7 +32,6 @@ type Service struct {
 	workers  config.WorkerConfig
 	pool     *pgxpool.Pool
 	streamer *sidecarstream.Streamer
-	retry    connection.RetryProfile
 }
 
 // Config holds all dependencies and tunables for a Service.
@@ -44,7 +42,6 @@ type Config struct {
 	Workers  config.WorkerConfig
 	DB       *pgxpool.Pool
 	Streamer *sidecarstream.Streamer
-	Retry    connection.RetryProfile
 }
 
 // New constructs a Service from cfg.
@@ -60,7 +57,6 @@ func New(cfg Config) (*Service, error) {
 		workers:  cfg.Workers,
 		pool:     cfg.DB,
 		streamer: cfg.Streamer,
-		retry:    cfg.Retry,
 	}, nil
 }
 
@@ -91,23 +87,11 @@ func (p *Service) Start(ctx context.Context) error {
 	return g.Wait()
 }
 
-// runBlockReceiver streams raw blocks from the sidecar into out, reconnecting on
-// transient errors using p.retry backoff. It returns nil when Deliver finishes
-// its range cleanly, and ctx.Err() when the context is cancelled.
+// runBlockReceiver streams raw blocks from the sidecar into out.
+// Reconnection on transient errors is handled internally by delivercommitter.
+// Returns when ctx is cancelled or a permanent error occurs.
 func (p *Service) runBlockReceiver(ctx context.Context, out channel.Writer[*common.Block]) error {
-	bo := p.retry.NewBackoff()
-	for ctx.Err() == nil {
-		err := blockReceiver(ctx, p.streamer, out)
-		if err == nil {
-			logger.Info("receiver: stream ended cleanly")
-			return nil
-		}
-		logger.Warnf("receiver: stream error, retrying after backoff: %v", err)
-		if waitErr := connection.WaitForNextBackOffDuration(ctx, bo); waitErr != nil {
-			return waitErr
-		}
-	}
-	return ctx.Err()
+	return blockReceiver(ctx, p.streamer, out)
 }
 
 // runBlockProcessor parses raw blocks from in and sends them to out.

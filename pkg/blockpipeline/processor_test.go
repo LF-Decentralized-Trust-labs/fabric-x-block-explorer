@@ -9,6 +9,7 @@ package blockpipeline
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,9 @@ type processorTestEnv struct {
 	done chan error
 }
 
-func startBlockProcessor(ctx context.Context) processorTestEnv {
+//nolint:revive // t precedes ctx to enable t.Helper() marking.
+func startBlockProcessor(t *testing.T, ctx context.Context) processorTestEnv {
+	t.Helper()
 	s := processorTestEnv{
 		in:   make(chan *common.Block, 10),
 		out:  make(chan *types.ProcessedBlock, 10),
@@ -55,10 +58,12 @@ func startBlockProcessor(ctx context.Context) processorTestEnv {
 
 func TestBlockProcessor(t *testing.T) {
 	t.Parallel()
+	testCtx, testCancel := context.WithTimeout(t.Context(), time.Minute)
+	t.Cleanup(testCancel)
 
 	t.Run("processes valid block", func(t *testing.T) {
 		t.Parallel()
-		s := startBlockProcessor(t.Context())
+		s := startBlockProcessor(t, t.Context())
 		s.in <- validBlock(1, 0)
 		select {
 		case processedBlock := <-s.out:
@@ -71,7 +76,7 @@ func TestBlockProcessor(t *testing.T) {
 
 	t.Run("skips nil block", func(t *testing.T) {
 		t.Parallel()
-		s := startBlockProcessor(t.Context())
+		s := startBlockProcessor(t, t.Context())
 		s.in <- nil              // should be skipped
 		s.in <- validBlock(2, 0) // should arrive
 		select {
@@ -84,22 +89,23 @@ func TestBlockProcessor(t *testing.T) {
 
 	t.Run("returns context error on cancellation", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithCancel(t.Context())
-		s := startBlockProcessor(ctx)
+		ctx, cancel := context.WithCancel(testCtx)
+		t.Cleanup(cancel)
+		s := startBlockProcessor(t, ctx)
 		cancel()
 		assert.ErrorIs(t, <-s.done, context.Canceled)
 	})
 
 	t.Run("returns nil on closed channel", func(t *testing.T) {
 		t.Parallel()
-		s := startBlockProcessor(t.Context())
+		s := startBlockProcessor(t, t.Context())
 		close(s.in)
 		require.NoError(t, <-s.done)
 	})
 
 	t.Run("returns error on invalid block", func(t *testing.T) {
 		t.Parallel()
-		s := startBlockProcessor(t.Context())
+		s := startBlockProcessor(t, t.Context())
 		// nil Header triggers a parse error.
 		s.in <- &common.Block{Header: nil, Data: &common.BlockData{}}
 		err := <-s.done
