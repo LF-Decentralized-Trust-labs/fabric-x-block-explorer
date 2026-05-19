@@ -29,7 +29,6 @@ func validCfg() Config {
 			Connection: connection.ClientConfig{
 				Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
 			},
-			ChannelID: "mychannel",
 		},
 		Workers: WorkerConfig{
 			ProcessorCount: DefaultProcessorCount,
@@ -97,9 +96,29 @@ func TestValidate(t *testing.T) {
 			wantErr: "sidecar endpoint port must be between 1 and 65535",
 		},
 		{
-			name:    "missing channel ID",
-			mutate:  func(c *Config) { c.Sidecar.ChannelID = "" },
-			wantErr: "sidecar channel ID is required",
+			name:    "sidecar TLS mode none is valid",
+			mutate:  func(c *Config) { c.Sidecar.Connection.TLS.Mode = connection.NoneTLSMode },
+			wantErr: "",
+		},
+		{
+			name:    "sidecar TLS mode tls is valid",
+			mutate:  func(c *Config) { c.Sidecar.Connection.TLS.Mode = connection.OneSideTLSMode },
+			wantErr: "",
+		},
+		{
+			name:    "sidecar TLS mode mtls is valid",
+			mutate:  func(c *Config) { c.Sidecar.Connection.TLS.Mode = connection.MutualTLSMode },
+			wantErr: "",
+		},
+		{
+			name:    "sidecar TLS mode empty string is valid (defaults to none)",
+			mutate:  func(c *Config) { c.Sidecar.Connection.TLS.Mode = "" },
+			wantErr: "",
+		},
+		{
+			name:    "invalid sidecar TLS mode",
+			mutate:  func(c *Config) { c.Sidecar.Connection.TLS.Mode = "insecure" },
+			wantErr: `invalid sidecar TLS mode "insecure": must be one of "none", "tls", "mtls"`,
 		},
 		{
 			name:    "processor count zero",
@@ -150,9 +169,7 @@ sidecar:
     endpoint:
       host: sidecarhost
       port: 7053
-  channel_id: testchannel
   start_block: 5
-  end_block: 100
 buffer:
   raw_channel_size: 300
   proc_channel_size: 400
@@ -180,9 +197,7 @@ func TestLoadFromFile(t *testing.T) {
 		require.NotNil(t, cfg.Sidecar.Connection.Endpoint)
 		assert.Equal(t, "sidecarhost", cfg.Sidecar.Connection.Endpoint.Host)
 		assert.Equal(t, 7053, cfg.Sidecar.Connection.Endpoint.Port)
-		assert.Equal(t, "testchannel", cfg.Sidecar.ChannelID)
 		assert.Equal(t, uint64(5), cfg.Sidecar.StartBlk)
-		assert.Equal(t, uint64(100), cfg.Sidecar.EndBlk)
 
 		assert.Equal(t, 300, cfg.Buffer.RawChannelSize)
 		assert.Equal(t, 400, cfg.Buffer.ProcChannelSize)
@@ -204,7 +219,6 @@ sidecar:
     endpoint:
       host: localhost
       port: 7052
-  channel_id: ch
 `
 		cfg, err := LoadFromFile(writeTempConfig(t, sparse))
 		require.NoError(t, err)
@@ -214,7 +228,6 @@ sidecar:
 		assert.Equal(t, DefaultProcessorCount, cfg.Workers.ProcessorCount)
 		assert.Equal(t, DefaultWriterCount, cfg.Workers.WriterCount)
 		assert.Equal(t, int32(DefaultDBMaxConns), cfg.DB.MaxConns)
-		assert.Equal(t, ^uint64(0), cfg.Sidecar.EndBlk)
 	})
 
 	t.Run("returns error for missing file", func(t *testing.T) {

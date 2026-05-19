@@ -10,7 +10,7 @@ import (
 )
 
 const getBlindWritesByBlockTxRange = `-- name: GetBlindWritesByBlockTxRange :many
-SELECT tx_num, ns_id, key, value
+SELECT tx_num, ns_id, seq_num, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
 ORDER BY tx_num, ns_id, seq_num
@@ -23,10 +23,11 @@ type GetBlindWritesByBlockTxRangeParams struct {
 }
 
 type GetBlindWritesByBlockTxRangeRow struct {
-	TxNum int64  `json:"tx_num"`
-	NsID  string `json:"ns_id"`
-	Key   []byte `json:"key"`
-	Value []byte `json:"value"`
+	TxNum  int64  `json:"tx_num"`
+	NsID   string `json:"ns_id"`
+	SeqNum int32  `json:"seq_num"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value"`
 }
 
 func (q *Queries) GetBlindWritesByBlockTxRange(ctx context.Context, arg GetBlindWritesByBlockTxRangeParams) ([]GetBlindWritesByBlockTxRangeRow, error) {
@@ -41,6 +42,7 @@ func (q *Queries) GetBlindWritesByBlockTxRange(ctx context.Context, arg GetBlind
 		if err := rows.Scan(
 			&i.TxNum,
 			&i.NsID,
+			&i.SeqNum,
 			&i.Key,
 			&i.Value,
 		); err != nil {
@@ -55,7 +57,7 @@ func (q *Queries) GetBlindWritesByBlockTxRange(ctx context.Context, arg GetBlind
 }
 
 const getBlindWritesByTx = `-- name: GetBlindWritesByTx :many
-SELECT ns_id, key, value
+SELECT ns_id, seq_num, key, value
 FROM tx_blind_writes
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, seq_num
@@ -67,9 +69,10 @@ type GetBlindWritesByTxParams struct {
 }
 
 type GetBlindWritesByTxRow struct {
-	NsID  string `json:"ns_id"`
-	Key   []byte `json:"key"`
-	Value []byte `json:"value"`
+	NsID   string `json:"ns_id"`
+	SeqNum int32  `json:"seq_num"`
+	Key    []byte `json:"key"`
+	Value  []byte `json:"value"`
 }
 
 func (q *Queries) GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTxParams) ([]GetBlindWritesByTxRow, error) {
@@ -81,7 +84,12 @@ func (q *Queries) GetBlindWritesByTx(ctx context.Context, arg GetBlindWritesByTx
 	items := []GetBlindWritesByTxRow{}
 	for rows.Next() {
 		var i GetBlindWritesByTxRow
-		if err := rows.Scan(&i.NsID, &i.Key, &i.Value); err != nil {
+		if err := rows.Scan(
+			&i.NsID,
+			&i.SeqNum,
+			&i.Key,
+			&i.Value,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

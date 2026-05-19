@@ -15,7 +15,10 @@ type Querier interface {
 	GetBlockHeight(ctx context.Context) (interface{}, error)
 	GetEndorsementsByBlockTxRange(ctx context.Context, arg GetEndorsementsByBlockTxRangeParams) ([]GetEndorsementsByBlockTxRangeRow, error)
 	GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsByTxParams) ([]GetEndorsementsByTxRow, error)
+	GetEnvelopeErrorsByBlock(ctx context.Context, blockNum int64) ([]BlockEnvelopeError, error)
 	GetNamespacePolicies(ctx context.Context, namespace string) ([]NamespacePolicy, error)
+	GetNamespacesByBlockTxRange(ctx context.Context, arg GetNamespacesByBlockTxRangeParams) ([]GetNamespacesByBlockTxRangeRow, error)
+	GetNamespacesByTx(ctx context.Context, arg GetNamespacesByTxParams) ([]GetNamespacesByTxRow, error)
 	GetReadWritesByBlockTxRange(ctx context.Context, arg GetReadWritesByBlockTxRangeParams) ([]GetReadWritesByBlockTxRangeRow, error)
 	GetReadWritesByTx(ctx context.Context, arg GetReadWritesByTxParams) ([]GetReadWritesByTxRow, error)
 	GetReadsOnlyByBlockTxRange(ctx context.Context, arg GetReadsOnlyByBlockTxRangeParams) ([]GetReadsOnlyByBlockTxRangeRow, error)
@@ -24,11 +27,13 @@ type Querier interface {
 	GetValidationCodeByTxID(ctx context.Context, txID []byte) (Transaction, error)
 	InsertBlindWrite(ctx context.Context, arg []InsertBlindWriteParams) *InsertBlindWriteBatchResults
 	InsertBlock(ctx context.Context, arg InsertBlockParams) error
+	InsertEnvelopeError(ctx context.Context, arg []InsertEnvelopeErrorParams) *InsertEnvelopeErrorBatchResults
 	InsertReadOnly(ctx context.Context, arg []InsertReadOnlyParams) *InsertReadOnlyBatchResults
 	InsertReadWrite(ctx context.Context, arg []InsertReadWriteParams) *InsertReadWriteBatchResults
 	InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults
 	InsertTxEndorsement(ctx context.Context, arg []InsertTxEndorsementParams) *InsertTxEndorsementBatchResults
 	InsertTxNamespace(ctx context.Context, arg []InsertTxNamespaceParams) *InsertTxNamespaceBatchResults
+	ListAllNamespacePolicies(ctx context.Context) ([]NamespacePolicy, error)
 	ListBlocks(ctx context.Context, arg ListBlocksParams) ([]Block, error)
 	UpsertNamespacePolicy(ctx context.Context, arg []UpsertNamespacePolicyParams) *UpsertNamespacePolicyBatchResults
 }

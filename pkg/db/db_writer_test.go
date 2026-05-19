@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
+	"github.com/hyperledger/fabric-x-common/api/committerpb"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
@@ -323,7 +323,7 @@ func TestWriteProcessedBlockInvalidTx(t *testing.T) {
 				Transactions: []types.TxRecord{
 					{
 						TxNum: 0, TxID: committedTxID,
-						ValidationCode: protoblocktx.Status_COMMITTED,
+						ValidationCode: committerpb.Status_COMMITTED,
 						Namespaces: []types.TxNamespaceRecord{
 							{NsID: "cc", NsVersion: 1, BlindWrites: []types.BlindWriteRecord{
 								{Key: []byte("k"), Value: []byte("v")},
@@ -333,7 +333,7 @@ func TestWriteProcessedBlockInvalidTx(t *testing.T) {
 					{
 						// Minimal record: no namespaces, as produced by buildMinimalTxRecord.
 						TxNum: 1, TxID: invalidTxID,
-						ValidationCode: protoblocktx.Status_ABORTED_MVCC_CONFLICT,
+						ValidationCode: committerpb.Status_ABORTED_MVCC_CONFLICT,
 					},
 				},
 			},
@@ -349,7 +349,7 @@ func TestWriteProcessedBlockInvalidTx(t *testing.T) {
 		require.NoError(t, err)
 		tx, err := env.Queries.GetValidationCodeByTxID(ctx, invalidTxIDBytes)
 		require.NoError(t, err)
-		assert.Equal(t, int16(protoblocktx.Status_ABORTED_MVCC_CONFLICT), tx.ValidationCode)
+		assert.Equal(t, committerpb.Status_ABORTED_MVCC_CONFLICT.String(), tx.ValidationCode)
 		assert.Equal(t, int64(1), tx.TxNum)
 
 		// The invalid transaction must have no namespace rows.

@@ -4,13 +4,13 @@ VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (block_num, tx_num, ns_id, seq_num) DO NOTHING;
 
 -- name: GetReadsOnlyByTx :many
-SELECT ns_id, key, version
+SELECT ns_id, seq_num, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, seq_num;
 
 -- name: GetReadsOnlyByBlockTxRange :many
-SELECT tx_num, ns_id, key, version
+SELECT tx_num, ns_id, seq_num, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
 ORDER BY tx_num, ns_id, seq_num;
