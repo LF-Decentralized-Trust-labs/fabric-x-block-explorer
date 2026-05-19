@@ -7,7 +7,7 @@ info:
     url: https://www.apache.org/licenses/LICENSE-2.0
 
 servers:
-  - url: http://127.0.0.1:8080
+  - url: __SERVER_URL__
     description: Local development server
 
 tags:
@@ -26,7 +26,7 @@ paths:
       tags: [Blocks]
       responses:
         "200":
-          description: Current block height
+          description: Current block height (highest stored block_num)
           content:
             application/json:
               schema:
@@ -44,35 +44,35 @@ paths:
       parameters:
         - name: from
           in: query
-          description: Start block number (inclusive)
+          description: Start block number (inclusive, default 0)
           schema:
             type: integer
             format: int64
             minimum: 0
         - name: to
           in: query
-          description: End block number (inclusive)
+          description: End block number (inclusive, default unbounded)
           schema:
             type: integer
             format: int64
             minimum: 0
         - name: limit
           in: query
-          description: Maximum number of blocks to return
+          description: Maximum number of blocks to return (default from server config)
           schema:
             type: integer
             format: int32
             minimum: 0
         - name: offset
           in: query
-          description: Number of blocks to skip
+          description: Number of blocks to skip within the matched range
           schema:
             type: integer
             format: int32
             minimum: 0
       responses:
         "200":
-          description: List of block summaries
+          description: List of block summaries with pagination metadata
           content:
             application/json:
               schema:
@@ -113,7 +113,7 @@ paths:
             minimum: 0
       responses:
         "200":
-          description: Block detail including transactions
+          description: Block detail including transactions and envelope errors
           content:
             application/json:
               schema:
@@ -140,32 +140,50 @@ paths:
           example: "3a4f9c1d..."
       responses:
         "200":
-          description: Transaction detail
+          description: Full transaction detail with decoded fields
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Transaction"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /namespaces/policies:
+    get:
+      summary: List all namespace policies
+      operationId: listAllNamespacePolicies
+      description: Returns the latest policy for every namespace stored in the database.
+      tags: [Namespaces]
+      responses:
+        "200":
+          description: Policy list for all namespaces
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NamespacePoliciesResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
   /namespaces/{namespace}/policies:
     get:
-      summary: Get namespace policies
+      summary: Get policies for a specific namespace
       operationId: getNamespacePolicies
       tags: [Namespaces]
       parameters:
         - name: namespace
           in: path
           required: true
-          description: Namespace identifier (use `_meta` for channel-level policies)
+          description: Namespace identifier (e.g. `_meta` for channel-level policies, or a chaincode name)
           schema:
             type: string
           example: "_meta"
       responses:
         "200":
-          description: Namespace policy rows
+          description: All policy versions for the given namespace, ordered newest first
           content:
             application/json:
               schema:
@@ -176,15 +194,27 @@ paths:
 components:
   schemas:
 
+    ErrorResponse:
+      type: object
+      description: Standard error body returned on all non-2xx responses.
+      properties:
+        error:
+          type: string
+          description: Human-readable error message
+          example: "not found"
+
     BlockHeightResponse:
       type: object
       properties:
         height:
           type: integer
           format: int64
+          description: Highest stored block_num (0 when no blocks ingested yet)
           example: 50
 
-    BlockSummary:
+    # BlockHeader is the shared set of fields present in both BlockSummary and Block.
+    # All binary fields (hashes, signatures) are lowercase hex strings.
+    BlockHeader:
       type: object
       properties:
         block_num:
@@ -194,15 +224,55 @@ components:
         tx_count:
           type: integer
           format: int32
+          description: Number of transactions stored from this block
           example: 1024
         previous_hash:
           type: string
-          format: byte
-          description: Base64-encoded previous block hash
+          description: Hex-encoded SHA-256 hash of the previous block header
+          example: "a3f2..."
         data_hash:
           type: string
-          format: byte
-          description: Base64-encoded data hash
+          description: Hex-encoded Merkle hash of the block transaction data
+          example: "b1c4..."
+        block_size:
+          type: integer
+          format: int32
+          nullable: true
+          description: Block size in bytes
+          example: 4096
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Block timestamp (UTC, RFC 3339)
+          example: "2026-05-18T14:32:00Z"
+        metadata_signatures:
+          type: string
+          description: Hex-encoded raw bytes from BlockMetadata[SIGNATURES] (orderer signatures proto)
+          example: "0a1b..."
+        last_config_index:
+          type: integer
+          format: int64
+          nullable: true
+          description: Block number of the most recent config block, decoded from BlockMetadata[LAST_CONFIG]
+          example: 0
+        tx_status_codes:
+          type: array
+          description: >
+            Per-envelope committer status strings decoded from BlockMetadata[TRANSACTIONS_FILTER].
+            Each entry corresponds to a block envelope position in order.
+          items:
+            type: string
+          example: ["COMMITTED", "ABORTED_MVCC_CONFLICT"]
+        commit_hash:
+          type: string
+          description: Hex-encoded bytes from BlockMetadata[COMMIT_HASH]
+          example: "fe3a..."
+
+    BlockSummary:
+      description: Lightweight block record returned by the list endpoint.
+      allOf:
+        - $ref: "#/components/schemas/BlockHeader"
 
     ListBlocksResponse:
       type: object
@@ -211,42 +281,198 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BlockSummary"
+        offset:
+          type: integer
+          format: int32
+          description: The offset value used for this response
+          example: 0
+        limit:
+          type: integer
+          format: int32
+          description: The limit value used for this response
+          example: 50
+        has_more:
+          type: boolean
+          description: True when the number of results equals limit (more pages may exist)
+          example: false
+
+    EnvelopeError:
+      type: object
+      description: >
+        A block position that could not be stored as a regular transaction.
+        Covers missing tx_id, bad proto, and duplicates flagged by the committer.
+      properties:
+        tx_num:
+          type: integer
+          format: int64
+          description: Position of the envelope within the block
+        validation_code:
+          type: string
+          description: Committer-assigned status (e.g. MALFORMED_BAD_ENVELOPE, REJECTED_DUPLICATE_TX_ID)
+          example: "MALFORMED_BAD_ENVELOPE"
+        tx_id:
+          type: string
+          description: Hex-encoded tx_id when extractable. Empty string when absent.
+          example: "3a4f..."
+        raw_envelope:
+          type: string
+          description: Hex-encoded original protobuf envelope bytes
+          example: "0a2b..."
 
     Block:
+      description: Full block detail including transactions and envelope errors.
+      allOf:
+        - $ref: "#/components/schemas/BlockHeader"
+        - type: object
+          properties:
+            transactions:
+              type: array
+              items:
+                $ref: "#/components/schemas/Transaction"
+            envelope_errors:
+              type: array
+              description: Envelopes that could not be stored as transactions (missing/duplicate tx_id)
+              items:
+                $ref: "#/components/schemas/EnvelopeError"
+
+    CreatorIdentity:
       type: object
+      description: Decoded msp.SerializedIdentity from the transaction signature header.
+      properties:
+        msp_id:
+          type: string
+          description: MSP identifier of the transaction signer
+          example: "Org1MSP"
+        certificate_pem:
+          type: string
+          description: PEM-encoded X.509 certificate of the transaction signer
+          example: "-----BEGIN CERTIFICATE-----\n..."
+
+    ChaincodeID:
+      type: object
+      description: Chaincode identity decoded from peer.ChaincodeHeaderExtension.
+      properties:
+        name:
+          type: string
+          description: Chaincode name
+          example: "mycc"
+        path:
+          type: string
+          description: Chaincode path (empty for installed chaincodes)
+          example: ""
+        version:
+          type: string
+          description: Chaincode version
+          example: "1.0"
+
+    PayloadExtension:
+      type: object
+      description: Decoded peer.ChaincodeHeaderExtension from the transaction channel header.
+      properties:
+        chaincode_id:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ChaincodeID"
+
+    NamespaceRow:
+      type: object
+      properties:
+        ns_id:
+          type: string
+          description: Namespace identifier
+          example: "mycc"
+        ns_version:
+          type: integer
+          format: int64
+          example: 1
+
+    Transaction:
+      type: object
+      description: >
+        Full transaction detail. All binary fields are lowercase hex strings.
+        Structured proto fields (creator_identity, payload_extension) are decoded
+        into typed sub-objects for human readability.
       properties:
         block_num:
           type: integer
           format: int64
           example: 2
-        tx_count:
+        tx_num:
           type: integer
-          format: int32
-          example: 3
-        previous_hash:
-          type: string
-          format: byte
-          description: Base64-encoded previous block hash
-        data_hash:
-          type: string
-          format: byte
-          description: Base64-encoded data hash
-        transactions:
-          type: array
-          items:
-            $ref: "#/components/schemas/Transaction"
-
-    Transaction:
-      type: object
-      properties:
+          format: int64
+          example: 0
         tx_id:
           type: string
           description: Hex-encoded transaction ID
           example: "3a4f9c1d..."
         validation_code:
           type: string
-          description: Fabric validation status (e.g. VALID, MVCC_READ_CONFLICT)
-          example: "VALID"
+          description: Committer validation status (e.g. COMMITTED, ABORTED_MVCC_CONFLICT)
+          example: "COMMITTED"
+        tx_type:
+          type: string
+          nullable: true
+          description: Fabric header type string (e.g. ENDORSER_TRANSACTION, CONFIG)
+          example: "ENDORSER_TRANSACTION"
+        chaincode_name:
+          type: string
+          nullable: true
+          description: Name of the invoked chaincode
+          example: "mycc"
+        creator_msp_id:
+          type: string
+          nullable: true
+          description: MSP ID of the transaction creator (also present in creator_identity)
+          example: "Org1MSP"
+        creator_identity:
+          nullable: true
+          description: Decoded signer identity. Null when the signature header cannot be decoded.
+          allOf:
+            - $ref: "#/components/schemas/CreatorIdentity"
+        creator_nonce:
+          type: string
+          description: Hex-encoded nonce from the signature header
+          example: "1a2b..."
+        envelope_signature:
+          type: string
+          description: Hex-encoded outer envelope signature
+          example: "3c4d..."
+        payload_extension:
+          nullable: true
+          description: Decoded chaincode header extension. Null for non-chaincode transactions.
+          allOf:
+            - $ref: "#/components/schemas/PayloadExtension"
+        channel_version:
+          type: integer
+          format: int32
+          nullable: true
+          description: Channel header version field
+          example: 0
+        channel_id:
+          type: string
+          nullable: true
+          description: Channel identifier from the channel header
+          example: "mychannel"
+        epoch:
+          type: integer
+          format: int64
+          nullable: true
+          description: Epoch from the channel header
+          example: 0
+        tls_cert_hash:
+          type: string
+          description: Hex-encoded TLS certificate hash (empty string when not using mutual TLS)
+          example: ""
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Transaction timestamp (UTC, RFC 3339)
+          example: "2026-05-18T14:32:00Z"
+        namespaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/NamespaceRow"
         blind_writes:
           type: array
           items:
@@ -267,60 +493,103 @@ components:
     BlindWriteRow:
       type: object
       properties:
+        ns_id:
+          type: string
+          description: Namespace identifier
+          example: "mycc"
+        seq_num:
+          type: integer
+          format: int32
+          description: Sequence number within the namespace
         key:
           type: string
-          format: byte
-          description: Base64-encoded key
+          description: Hex-encoded key
+          example: "6b657931"
         value:
           type: string
-          format: byte
-          description: Base64-encoded value
+          description: Hex-encoded value
+          example: "76616c31"
 
     EndorsementRow:
       type: object
       properties:
+        ns_id:
+          type: string
+          description: Namespace identifier
+          example: "mycc"
+        seq_num:
+          type: integer
+          format: int32
+          description: Sequence number within the namespace
         endorsement:
           type: string
-          format: byte
-          description: Base64-encoded endorsement bytes
+          description: Hex-encoded endorsement bytes (serialised peer.Endorsement proto)
+          example: "0a1b..."
         msp_id:
           type: string
           nullable: true
+          description: MSP ID of the endorser
           example: "Org1MSP"
         identity:
-          type: string
-          format: byte
-          description: Base64-encoded signer identity bytes
+          type: object
+          nullable: true
+          description: Parsed endorser identity (mspid + certificate or certificate_id)
+          properties:
+            mspid:
+              type: string
+              example: "Org1MSP"
+            certificate:
+              type: string
+              description: Base64-encoded DER certificate bytes (standard Fabric identity)
+            certificate_id:
+              type: string
+              description: Pre-stored certificate ID (threshold / fabric-x identity scheme)
 
     ReadWriteRow:
       type: object
       properties:
+        ns_id:
+          type: string
+          description: Namespace identifier
+          example: "mycc"
+        seq_num:
+          type: integer
+          format: int32
+          description: Sequence number within the namespace
         key:
           type: string
-          format: byte
-          description: Base64-encoded key
+          description: Hex-encoded key
+          example: "6b657931"
         read_version:
           type: integer
           format: int64
           nullable: true
-          description: Read version; absent when not set
+          description: Version at which the key was read
         value:
           type: string
-          format: byte
-          description: Base64-encoded written value
+          description: Hex-encoded written value
+          example: "76616c31"
 
     ReadOnlyRow:
       type: object
       properties:
+        ns_id:
+          type: string
+          description: Namespace identifier
+          example: "mycc"
+        seq_num:
+          type: integer
+          format: int32
+          description: Sequence number within the namespace
         key:
           type: string
-          format: byte
-          description: Base64-encoded key
+          description: Hex-encoded key
+          example: "6b657931"
         version:
           type: integer
           format: int64
           nullable: true
-          description: Version; absent when not set
+          description: Version at which the key was read
 
     NamespacePolicyRow:
       type: object
@@ -334,11 +603,11 @@ components:
           example: 0
         policy:
           type: string
-          description: Human-readable policy expression
+          description: Human-readable policy expression (e.g. signature policy tree or config group summary)
           example: "1-of(Org1MSP.peer)"
         certificates:
           type: array
-          description: PEM-encoded X.509 certificates
+          description: PEM-encoded X.509 certificates extracted from the policy bytes
           items:
             type: string
         msp_ids:
@@ -367,18 +636,18 @@ components:
     BadRequest:
       description: Invalid query or path parameter
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: "#/components/schemas/ErrorResponse"
     NotFound:
       description: Resource not found
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: "#/components/schemas/ErrorResponse"
     InternalError:
       description: Internal server error
       content:
-        text/plain:
+        application/json:
           schema:
-            type: string
+            $ref: "#/components/schemas/ErrorResponse"
