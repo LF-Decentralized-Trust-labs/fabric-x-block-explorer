@@ -1,0 +1,29 @@
+# CODEOWNERS
+#
+# Each line is a file pattern followed by one or more owners.
+# GitHub will automatically request a review from these owners
+# when a pull request modifies matching files.
+#
+# Syntax: <pattern> <owner> [<owner> ...]
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+
+# Core pipeline
+/pkg/blockpipeline/ @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+/pkg/parser/        @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+
+# Database layer
+/pkg/db/            @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+
+# API layer
+/pkg/api/           @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+
+# Configuration
+/pkg/config/        @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+
+# CI / build
+/.github/           @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+/Makefile           @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+/Dockerfile         @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers

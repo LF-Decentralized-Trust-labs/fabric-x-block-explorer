@@ -11,6 +11,9 @@ RUN CGO_ENABLED=0 go build -trimpath -o /explorer ./cmd/explorer
 FROM alpine:3.21
 WORKDIR /app
 COPY --from=builder /explorer /usr/local/bin/explorer
-COPY config.yaml ./
+# Copy only the deployment config. config.local.yaml is for local developer use
+# only and is intentionally excluded from the image.
+# docker-compose.yaml passes --config config.docker.yaml at runtime.
+COPY config.docker.yaml ./
 ENTRYPOINT ["explorer"]
 CMD ["start"]
