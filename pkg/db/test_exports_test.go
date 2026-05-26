@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
-	committerdbtest "github.com/hyperledger/fabric-x-committer/service/vc/dbtest"
+	"github.com/hyperledger/fabric-x-committer/utils/testdb"
 
 	dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
 )
@@ -33,7 +33,7 @@ type DatabaseTestEnv struct {
 func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 	t.Helper()
 
-	conn := committerdbtest.PrepareTestEnv(t)
+	conn := testdb.PrepareTestEnv(t)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
 	t.Cleanup(cancel)
@@ -48,8 +48,7 @@ func NewDatabaseTestEnv(t *testing.T) *DatabaseTestEnv {
 	require.NoError(t, err, "failed to create connection pool")
 	t.Cleanup(pool.Close)
 
-	_, err = pool.Exec(ctx, schemaSQL)
-	require.NoError(t, err, "failed to initialize database schema")
+	require.NoError(t, ApplyMigrations(ctx, pool), "failed to initialize database schema")
 
 	return &DatabaseTestEnv{
 		Pool:    pool,

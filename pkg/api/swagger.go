@@ -9,13 +9,14 @@ package api
 import (
 	_ "embed"
 	"net/http"
+	"strings"
 )
 
 //go:embed openapi.yaml
 var openapiSpec []byte
 
-// swaggerUIHTML is a minimal Swagger UI page that loads the spec from /openapi.yaml.
-// It uses the Swagger UI CDN bundle so no additional Go dependencies are required.
+// swaggerUIHTML is a Swagger UI page. The CORS middleware on the REST server
+// ensures /openapi.yaml is reachable from any browser origin.
 const swaggerUIHTML = `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -31,20 +32,31 @@ const swaggerUIHTML = `<!DOCTYPE html>
     <script>
       window.onload = function () {
         SwaggerUIBundle({
-          url: "/openapi.yaml",
+          url: window.location.origin + "/openapi.yaml",
           dom_id: "#swagger-ui",
           presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
           layout: "StandaloneLayout",
           deepLinking: true,
+          requestInterceptor: function(req) {
+            // Ensure the spec fetch always goes to the explorer origin,
+            // not the browser's current origin (important when opened via proxy).
+            return req;
+          },
         });
       };
     </script>
   </body>
 </html>`
 
-func (*Service) handleOpenAPISpec(w http.ResponseWriter, _ *http.Request) {
+func (*Service) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/yaml; charset=utf-8")
-	_, _ = w.Write(openapiSpec)
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	spec := strings.ReplaceAll(string(openapiSpec), "__SERVER_URL__", scheme+"://"+r.Host)
+	//nolint:gosec // spec is static embedded YAML; only __SERVER_URL__ is replaced with a trusted request-derived value
+	_, _ = w.Write([]byte(spec))
 }
 
 func handleSwaggerUI(w http.ResponseWriter, _ *http.Request) {

@@ -9,6 +9,7 @@ package sidecarstream
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,16 +22,22 @@ import (
 )
 
 // localSidecarCfg returns a SidecarConfig pointing at localhost:7052.
-// sidecarclient.New uses lazy gRPC connections, so no live server is needed.
+// delivercommitter uses lazy gRPC connections, so no live server is needed.
 func localSidecarCfg() config.SidecarConfig {
 	return config.SidecarConfig{
 		Connection: connection.ClientConfig{
 			Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
 		},
-		ChannelID: "testchannel",
-		StartBlk:  0,
-		EndBlk:    1000,
+		StartBlk: 0,
 	}
+}
+
+// newLocalStreamer creates a Streamer using localSidecarCfg and startBlk 0.
+func newLocalStreamer(t *testing.T) *Streamer {
+	t.Helper()
+	s := NewStreamer(localSidecarCfg(), 0)
+	require.NotNil(t, s)
+	return s
 }
 
 func TestNewStreamer(t *testing.T) {
@@ -38,24 +45,15 @@ func TestNewStreamer(t *testing.T) {
 
 	t.Run("creates streamer with valid config", func(t *testing.T) {
 		t.Parallel()
-		streamer, err := NewStreamer(localSidecarCfg())
-		require.NoError(t, err)
-		require.NotNil(t, streamer)
-		assert.NotNil(t, streamer.client)
-		streamer.Close()
-	})
-
-	t.Run("stores config fields", func(t *testing.T) {
-		t.Parallel()
+		streamer := newLocalStreamer(t)
+		require.NotNil(t, streamer.clientConfig)
 		cases := []struct {
-			name      string
-			channelID string
-			startBlk  uint64
-			endBlk    uint64
+			name     string
+			startBlk uint64
 		}{
-			{"default range", "mychannel", 0, 1000},
-			{"specific range", "businesschannel", 100, 200},
-			{"large range", "ledger1", 500, 5000},
+			{"default range", 0},
+			{"specific range", 100},
+			{"large range", 500},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
@@ -64,16 +62,10 @@ func TestNewStreamer(t *testing.T) {
 					Connection: connection.ClientConfig{
 						Endpoint: &connection.Endpoint{Host: "localhost", Port: 7052},
 					},
-					ChannelID: tc.channelID,
-					StartBlk:  tc.startBlk,
-					EndBlk:    tc.endBlk,
 				}
-				streamer, err := NewStreamer(cfg)
-				require.NoError(t, err)
+				streamer := NewStreamer(cfg, tc.startBlk)
 				require.NotNil(t, streamer)
-				assert.Equal(t, tc.channelID, streamer.channelID)
-				assert.Equal(t, int64(tc.startBlk), streamer.startBlk) //nolint:gosec
-				assert.Equal(t, tc.endBlk, streamer.endBlk)
+				assert.Equal(t, tc.startBlk, streamer.startBlk)
 				streamer.Close()
 			})
 		}
@@ -85,31 +77,30 @@ func TestStreamerClose(t *testing.T) {
 
 	t.Run("multiple calls must not panic", func(t *testing.T) {
 		t.Parallel()
-		streamer, err := NewStreamer(localSidecarCfg())
-		require.NoError(t, err)
-		require.NotNil(t, streamer)
+		streamer := newLocalStreamer(t)
 		assert.NotPanics(t, func() { streamer.Close() })
 		assert.NotPanics(t, func() { streamer.Close() })
 	})
 
-	t.Run("nil client must not panic", func(t *testing.T) {
+	t.Run("empty streamer must not panic", func(t *testing.T) {
 		t.Parallel()
-		streamer := &Streamer{client: nil}
+		streamer := &Streamer{}
 		assert.NotPanics(t, func() { streamer.Close() })
 	})
 }
 
 func TestDeliver(t *testing.T) {
 	t.Parallel()
+	testCtx, testCancel := context.WithTimeout(t.Context(), time.Minute)
+	t.Cleanup(testCancel)
 
 	t.Run("does not panic on single call", func(t *testing.T) {
 		t.Parallel()
-		streamer, err := NewStreamer(localSidecarCfg())
-		require.NoError(t, err)
-		require.NotNil(t, streamer)
-		defer streamer.Close()
+		streamer := newLocalStreamer(t)
+		t.Cleanup(streamer.Close)
 
-		ctx, cancel := context.WithCancel(t.Context())
+		ctx, cancel := context.WithCancel(testCtx)
+		t.Cleanup(cancel)
 		// Deliver is blocking; run in a goroutine and cancel to stop it.
 		done := make(chan struct{})
 		go func() {
@@ -122,13 +113,11 @@ func TestDeliver(t *testing.T) {
 
 	t.Run("does not panic on multiple concurrent calls", func(t *testing.T) {
 		t.Parallel()
-		streamer, err := NewStreamer(localSidecarCfg())
-		require.NoError(t, err)
-		require.NotNil(t, streamer)
-		defer streamer.Close()
+		streamer := newLocalStreamer(t)
+		t.Cleanup(streamer.Close)
 
-		ctx, cancel := context.WithCancel(t.Context())
-		defer cancel()
+		ctx, cancel := context.WithCancel(testCtx)
+		t.Cleanup(cancel)
 		go func() { _ = streamer.Deliver(ctx, channel.Make[*common.Block](ctx, 5)) }()
 		go func() { _ = streamer.Deliver(ctx, channel.Make[*common.Block](ctx, 5)) }()
 	})

@@ -12,7 +12,7 @@ import (
 )
 
 const getEndorsementsByBlockTxRange = `-- name: GetEndorsementsByBlockTxRange :many
-SELECT tx_num, ns_id, endorsement, msp_id, identity
+SELECT tx_num, ns_id, seq_num, endorsement, msp_id, identity
 FROM tx_endorsements
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
 ORDER BY tx_num, ns_id, seq_num
@@ -27,6 +27,7 @@ type GetEndorsementsByBlockTxRangeParams struct {
 type GetEndorsementsByBlockTxRangeRow struct {
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Endorsement []byte      `json:"endorsement"`
 	MspID       pgtype.Text `json:"msp_id"`
 	Identity    []byte      `json:"identity"`
@@ -44,6 +45,7 @@ func (q *Queries) GetEndorsementsByBlockTxRange(ctx context.Context, arg GetEndo
 		if err := rows.Scan(
 			&i.TxNum,
 			&i.NsID,
+			&i.SeqNum,
 			&i.Endorsement,
 			&i.MspID,
 			&i.Identity,
@@ -59,7 +61,7 @@ func (q *Queries) GetEndorsementsByBlockTxRange(ctx context.Context, arg GetEndo
 }
 
 const getEndorsementsByTx = `-- name: GetEndorsementsByTx :many
-SELECT ns_id, endorsement, msp_id, identity
+SELECT ns_id, seq_num, endorsement, msp_id, identity
 FROM tx_endorsements
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, seq_num
@@ -72,6 +74,7 @@ type GetEndorsementsByTxParams struct {
 
 type GetEndorsementsByTxRow struct {
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Endorsement []byte      `json:"endorsement"`
 	MspID       pgtype.Text `json:"msp_id"`
 	Identity    []byte      `json:"identity"`
@@ -88,6 +91,7 @@ func (q *Queries) GetEndorsementsByTx(ctx context.Context, arg GetEndorsementsBy
 		var i GetEndorsementsByTxRow
 		if err := rows.Scan(
 			&i.NsID,
+			&i.SeqNum,
 			&i.Endorsement,
 			&i.MspID,
 			&i.Identity,

@@ -14,11 +14,10 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
-	"github.com/hyperledger/fabric-protos-go-apiv2/msp"
-	"github.com/hyperledger/fabric-protos-go-apiv2/peer"
-	"github.com/hyperledger/fabric-x-committer/api/protoblocktx"
-	committypes "github.com/hyperledger/fabric-x-committer/api/types"
 	"github.com/hyperledger/fabric-x-committer/utils/serialization"
+	"github.com/hyperledger/fabric-x-common/api/applicationpb"
+	"github.com/hyperledger/fabric-x-common/api/committerpb"
+	"github.com/hyperledger/fabric-x-common/api/msppb"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
@@ -114,24 +113,24 @@ func TestParseContent(t *testing.T) {
 
 	t.Run("read-write and reads-only sets", func(t *testing.T) {
 		t.Parallel()
-		ns := &protoblocktx.TxNamespace{
+		ns := &applicationpb.TxNamespace{
 			NsId:      "mycc",
 			NsVersion: 1,
-			ReadWrites: []*protoblocktx.ReadWrite{
+			ReadWrites: []*applicationpb.ReadWrite{
 				{Key: []byte("key1"), Value: []byte("value1"), Version: util.Ptr(uint64(10))},
 			},
-			ReadsOnly: []*protoblocktx.Read{
+			ReadsOnly: []*applicationpb.Read{
 				{Key: []byte("key2"), Version: util.Ptr(uint64(5))},
 			},
 		}
 		env := createEnvelope(t,
 			&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx123"},
-			marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
+			marshalTx(t, &applicationpb.Tx{Namespaces: []*applicationpb.TxNamespace{ns}}),
 		)
 		block := buildBlock(t, blockSpec{
 			num: 10, prevHash: []byte("prev"), dataHash: []byte("data"),
 			envelopes: []*common.Envelope{env},
-			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+			statuses:  []committerpb.Status{committerpb.Status_COMMITTED},
 		})
 
 		parsedData, blockInfo, err := Parse(block)
@@ -170,8 +169,8 @@ func TestExtractPolicies(t *testing.T) {
 			name: "config transaction with namespace policies",
 			envelope: createEnvelope(t, &common.ChannelHeader{
 				Type: int32(common.HeaderType_CONFIG),
-			}, marshalNamespacePolicies(t, &protoblocktx.NamespacePolicies{
-				Policies: []*protoblocktx.PolicyItem{
+			}, marshalNamespacePolicies(t, &applicationpb.NamespacePolicies{
+				Policies: []*applicationpb.PolicyItem{
 					{
 						Namespace: "mycc",
 						Version:   1,
@@ -212,48 +211,51 @@ func TestPolicyToJSON(t *testing.T) {
 	assert.Contains(t, string(jsonData), "policy_bytes")
 }
 
-func TestEndorsementToIdentityJSON(t *testing.T) {
+func TestIdentityToJSON(t *testing.T) {
 	t.Parallel()
 
-	t.Run("valid identity", func(t *testing.T) {
+	t.Run("certificate identity", func(t *testing.T) {
 		t.Parallel()
-		serializedIDBytes, err := proto.Marshal(&msp.SerializedIdentity{
-			Mspid: "Org1MSP", IdBytes: []byte("certificate_data"),
-		})
+		id := &msppb.Identity{
+			MspId:   "Org1MSP",
+			Creator: &msppb.Identity_Certificate{Certificate: []byte("cert_bytes")},
+		}
+		identityJSON, err := identityToJSON(id)
 		require.NoError(t, err)
-		endorsementBytes, err := proto.Marshal(&peer.Endorsement{
-			Endorser: serializedIDBytes, Signature: []byte("signature"),
-		})
-		require.NoError(t, err)
-
-		mspID, identityJSON, err := endorsementToIdentityJSON(endorsementBytes)
-		require.NoError(t, err)
-		require.NotNil(t, mspID)
-		assert.Equal(t, "Org1MSP", *mspID)
 		assert.Contains(t, string(identityJSON), "Org1MSP")
-		assert.Contains(t, string(identityJSON), "id_bytes")
+		assert.Contains(t, string(identityJSON), "certificate")
 	})
 
-	t.Run("invalid protobuf returns error", func(t *testing.T) {
+	t.Run("certificate_id identity", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := endorsementToIdentityJSON([]byte("invalid_protobuf"))
-		assert.Error(t, err)
+		id := &msppb.Identity{
+			MspId:   "Org2MSP",
+			Creator: &msppb.Identity_CertificateId{CertificateId: "cert-id-abc"},
+		}
+		identityJSON, err := identityToJSON(id)
+		require.NoError(t, err)
+		assert.Contains(t, string(identityJSON), "Org2MSP")
+		assert.Contains(t, string(identityJSON), "cert-id-abc")
 	})
 }
 
 func TestRWSets(t *testing.T) {
 	t.Parallel()
-	ns := &protoblocktx.TxNamespace{
+	ns := &applicationpb.TxNamespace{
 		NsId:      "chaincode1",
 		NsVersion: 2,
-		ReadWrites: []*protoblocktx.ReadWrite{
+		ReadWrites: []*applicationpb.ReadWrite{
 			{Key: []byte("key1"), Value: []byte("value1"), Version: util.Ptr(uint64(1))},
 		},
 	}
 
-	tx := &protoblocktx.Tx{
-		Namespaces: []*protoblocktx.TxNamespace{ns},
-		Signatures: [][]byte{[]byte("sig1")},
+	tx := &applicationpb.Tx{
+		Namespaces: []*applicationpb.TxNamespace{ns},
+		Endorsements: []*applicationpb.Endorsements{
+			{EndorsementsWithIdentity: []*applicationpb.EndorsementWithIdentity{
+				{Endorsement: []byte("sig1")},
+			}},
+		},
 	}
 	txBytes, err := proto.Marshal(tx)
 	require.NoError(t, err)
@@ -275,7 +277,7 @@ func TestRWSets(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, nsDataList, 1)
 	assert.Equal(t, "chaincode1", nsDataList[0].Namespace.NsId)
-	assert.NotNil(t, nsDataList[0].Endorsement)
+	assert.NotEmpty(t, nsDataList[0].Endorsements)
 }
 
 func TestParseTransactions(t *testing.T) {
@@ -283,20 +285,20 @@ func TestParseTransactions(t *testing.T) {
 
 	t.Run("blind writes", func(t *testing.T) {
 		t.Parallel()
-		ns := &protoblocktx.TxNamespace{
+		ns := &applicationpb.TxNamespace{
 			NsId: "mycc", NsVersion: 1,
-			BlindWrites: []*protoblocktx.Write{
+			BlindWrites: []*applicationpb.Write{
 				{Key: []byte("blind_key"), Value: []byte("blind_value")},
 			},
 		}
 		env := createEnvelope(t,
 			&common.ChannelHeader{Type: int32(common.HeaderType_ENDORSER_TRANSACTION), TxId: "tx_blind"},
-			marshalTx(t, &protoblocktx.Tx{Namespaces: []*protoblocktx.TxNamespace{ns}}),
+			marshalTx(t, &applicationpb.Tx{Namespaces: []*applicationpb.TxNamespace{ns}}),
 		)
 		block := buildBlock(t, blockSpec{
 			num:       1,
 			envelopes: []*common.Envelope{env},
-			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+			statuses:  []committerpb.Status{committerpb.Status_COMMITTED},
 		})
 		parsedData, _, err := Parse(block)
 		require.NoError(t, err)
@@ -313,7 +315,7 @@ func TestParseTransactions(t *testing.T) {
 			Header: &common.BlockHeader{Number: 1},
 			Data:   &common.BlockData{Data: [][]byte{[]byte("invalid_envelope_data")}},
 			Metadata: &common.BlockMetadata{
-				Metadata: [][]byte{{}, {}, {byte(protoblocktx.Status_COMMITTED)}},
+				Metadata: [][]byte{{}, {}, {byte(committerpb.Status_COMMITTED)}},
 			},
 		}
 		parsedData, blockInfo, err := Parse(block)
@@ -324,7 +326,7 @@ func TestParseTransactions(t *testing.T) {
 
 	t.Run("config transaction extracts meta-namespace policy", func(t *testing.T) {
 		t.Parallel()
-		configBytes, err := proto.Marshal(&protoblocktx.ConfigTransaction{
+		configBytes, err := proto.Marshal(&applicationpb.ConfigTransaction{
 			Version: 1, Envelope: []byte("config_envelope_data"),
 		})
 		require.NoError(t, err)
@@ -335,12 +337,12 @@ func TestParseTransactions(t *testing.T) {
 		block := buildBlock(t, blockSpec{
 			num:       0,
 			envelopes: []*common.Envelope{env},
-			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+			statuses:  []committerpb.Status{committerpb.Status_COMMITTED},
 		})
 		parsedData, _, err := Parse(block)
 		require.NoError(t, err)
 		assert.Len(t, parsedData.Policies, 1)
-		assert.Equal(t, committypes.MetaNamespaceID, parsedData.Policies[0].Namespace)
+		assert.Equal(t, committerpb.MetaNamespaceID, parsedData.Policies[0].Namespace)
 	})
 
 	// non-COMMITTED tx is stored; unparseable envelope (MALFORMED_BAD_ENVELOPE) is dropped.
@@ -369,8 +371,8 @@ func TestParseTransactions(t *testing.T) {
 					{},
 					{},
 					{
-						byte(protoblocktx.Status_COMMITTED),             // tx 0 — bad envelope
-						byte(protoblocktx.Status_ABORTED_MVCC_CONFLICT), // tx 1 — invalid but parseable
+						byte(committerpb.Status_COMMITTED),             // tx 0 — bad envelope
+						byte(committerpb.Status_ABORTED_MVCC_CONFLICT), // tx 1 — invalid but parseable
 					},
 				},
 			},
@@ -383,28 +385,32 @@ func TestParseTransactions(t *testing.T) {
 		tx := parsedData.Transactions[0]
 		assert.Equal(t, uint64(1), tx.TxNum)
 		assert.Equal(t, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef", tx.TxID)
-		assert.Equal(t, protoblocktx.Status_ABORTED_MVCC_CONFLICT, tx.ValidationCode)
+		assert.Equal(t, committerpb.Status_ABORTED_MVCC_CONFLICT, tx.ValidationCode)
 		assert.Empty(t, tx.Namespaces)
 	})
 
-	// committed txns with unparseable rwsets are NOT stored (indicate a pipeline bug).
-	t.Run("committed tx with bad rwset is not stored", func(t *testing.T) {
+	// committed txns with unparseable rwsets are stored as minimal records (no namespace data).
+	t.Run("committed tx with bad rwset is stored as minimal record", func(t *testing.T) {
 		t.Parallel()
+		txID := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		env := createEnvelope(t,
 			&common.ChannelHeader{
 				Type: int32(common.HeaderType_MESSAGE),
-				TxId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				TxId: txID,
 			},
 			[]byte("malformed-tx-data"),
 		)
 		block := buildBlock(t, blockSpec{
 			num:       43,
 			envelopes: []*common.Envelope{env},
-			statuses:  []protoblocktx.Status{protoblocktx.Status_COMMITTED},
+			statuses:  []committerpb.Status{committerpb.Status_COMMITTED},
 		})
 		parsedData, _, err := Parse(block)
 		require.NoError(t, err)
-		assert.Empty(t, parsedData.Transactions, "committed tx with bad rwset must not be stored")
+		require.Len(t, parsedData.Transactions, 1, "committed tx with bad rwset must be stored as a minimal record")
+		assert.Equal(t, txID, parsedData.Transactions[0].TxID)
+		assert.Equal(t, committerpb.Status_COMMITTED, parsedData.Transactions[0].ValidationCode)
+		assert.Empty(t, parsedData.Transactions[0].Namespaces, "minimal record must have no namespace data")
 	})
 }
 
@@ -435,7 +441,7 @@ type blockSpec struct {
 	prevHash  []byte
 	dataHash  []byte
 	envelopes []*common.Envelope
-	statuses  []protoblocktx.Status
+	statuses  []committerpb.Status
 }
 
 // buildBlock constructs a common.Block from a blockSpec.
@@ -472,15 +478,15 @@ func buildBlock(t *testing.T, spec blockSpec) *common.Block {
 	}
 }
 
-// marshalTx marshals a protoblocktx.Tx and returns the raw bytes.
-func marshalTx(t *testing.T, tx *protoblocktx.Tx) []byte {
+// marshalTx marshals an applicationpb.Tx and returns the raw bytes.
+func marshalTx(t *testing.T, tx *applicationpb.Tx) []byte {
 	t.Helper()
 	b, err := proto.Marshal(tx)
 	require.NoError(t, err)
 	return b
 }
 
-func marshalNamespacePolicies(t *testing.T, np *protoblocktx.NamespacePolicies) []byte {
+func marshalNamespacePolicies(t *testing.T, np *applicationpb.NamespacePolicies) []byte {
 	t.Helper()
 	data, err := proto.Marshal(np)
 	require.NoError(t, err)

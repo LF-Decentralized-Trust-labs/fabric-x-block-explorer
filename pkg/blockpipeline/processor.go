@@ -8,18 +8,17 @@ package blockpipeline
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/cockroachdb/errors"
-
+	"github.com/hyperledger/fabric-lib-go/common/flogging"
 	"github.com/hyperledger/fabric-protos-go-apiv2/common"
 	"github.com/hyperledger/fabric-x-committer/utils/channel"
-	"github.com/hyperledger/fabric-x-committer/utils/logging"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/parser"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/types"
 )
 
-var logger = logging.New("blockpipeline")
+var logger = flogging.MustGetLogger("blockpipeline")
 
 // blockProcessor parses raw blocks and sends them to the output channel.
 // It returns ctx.Err() on clean shutdown and a non-nil error on failure.
@@ -41,7 +40,7 @@ func blockProcessor(
 		parsedData, blockInfo, err := parser.Parse(inputBlock)
 		if err != nil {
 			logger.Warnf("blockProcessor stopped: %v", err)
-			return errors.Wrapf(err, "block processing error")
+			return fmt.Errorf("block processing error: %w", err)
 		}
 		processedBlock := &types.ProcessedBlock{
 			Data:      parsedData,

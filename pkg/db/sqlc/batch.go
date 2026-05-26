@@ -76,6 +76,63 @@ func (b *InsertBlindWriteBatchResults) Close() error {
 	return b.br.Close()
 }
 
+const insertEnvelopeError = `-- name: InsertEnvelopeError :batchexec
+INSERT INTO block_envelope_errors (block_num, tx_num, validation_code, raw_envelope, tx_id)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (block_num, tx_num) DO NOTHING
+`
+
+type InsertEnvelopeErrorBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertEnvelopeErrorParams struct {
+	BlockNum       int64  `json:"block_num"`
+	TxNum          int64  `json:"tx_num"`
+	ValidationCode string `json:"validation_code"`
+	RawEnvelope    []byte `json:"raw_envelope"`
+	TxID           []byte `json:"tx_id"`
+}
+
+func (q *Queries) InsertEnvelopeError(ctx context.Context, arg []InsertEnvelopeErrorParams) *InsertEnvelopeErrorBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.BlockNum,
+			a.TxNum,
+			a.ValidationCode,
+			a.RawEnvelope,
+			a.TxID,
+		}
+		batch.Queue(insertEnvelopeError, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertEnvelopeErrorBatchResults{br, len(arg), false}
+}
+
+func (b *InsertEnvelopeErrorBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertEnvelopeErrorBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const insertReadOnly = `-- name: InsertReadOnly :batchexec
 INSERT INTO tx_reads_only (block_num, tx_num, ns_id, seq_num, key, version)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -200,10 +257,10 @@ const insertTransaction = `-- name: InsertTransaction :batchexec
 INSERT INTO transactions (
     block_num, tx_num, tx_id, validation_code, tx_type, chaincode_name,
     creator_msp_id, creator_id_bytes, creator_nonce, envelope_signature,
-    chaincode_proposal_input, tx_response_status, tx_response_message,
-    tx_response_payload, payload_proposal_hash, payload_extension, created_at
+    payload_extension, channel_version, channel_id, epoch, tls_cert_hash,
+    created_at
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 ON CONFLICT (block_num, tx_num) DO NOTHING
 `
 
@@ -214,23 +271,22 @@ type InsertTransactionBatchResults struct {
 }
 
 type InsertTransactionParams struct {
-	BlockNum               int64            `json:"block_num"`
-	TxNum                  int64            `json:"tx_num"`
-	TxID                   []byte           `json:"tx_id"`
-	ValidationCode         int16            `json:"validation_code"`
-	TxType                 pgtype.Int2      `json:"tx_type"`
-	ChaincodeName          pgtype.Text      `json:"chaincode_name"`
-	CreatorMspID           pgtype.Text      `json:"creator_msp_id"`
-	CreatorIDBytes         []byte           `json:"creator_id_bytes"`
-	CreatorNonce           []byte           `json:"creator_nonce"`
-	EnvelopeSignature      []byte           `json:"envelope_signature"`
-	ChaincodeProposalInput []byte           `json:"chaincode_proposal_input"`
-	TxResponseStatus       pgtype.Int4      `json:"tx_response_status"`
-	TxResponseMessage      pgtype.Text      `json:"tx_response_message"`
-	TxResponsePayload      []byte           `json:"tx_response_payload"`
-	PayloadProposalHash    []byte           `json:"payload_proposal_hash"`
-	PayloadExtension       []byte           `json:"payload_extension"`
-	CreatedAt              pgtype.Timestamp `json:"created_at"`
+	BlockNum          int64            `json:"block_num"`
+	TxNum             int64            `json:"tx_num"`
+	TxID              []byte           `json:"tx_id"`
+	ValidationCode    string           `json:"validation_code"`
+	TxType            pgtype.Text      `json:"tx_type"`
+	ChaincodeName     pgtype.Text      `json:"chaincode_name"`
+	CreatorMspID      pgtype.Text      `json:"creator_msp_id"`
+	CreatorIDBytes    []byte           `json:"creator_id_bytes"`
+	CreatorNonce      []byte           `json:"creator_nonce"`
+	EnvelopeSignature []byte           `json:"envelope_signature"`
+	PayloadExtension  []byte           `json:"payload_extension"`
+	ChannelVersion    pgtype.Int4      `json:"channel_version"`
+	ChannelID         pgtype.Text      `json:"channel_id"`
+	Epoch             pgtype.Int8      `json:"epoch"`
+	TlsCertHash       []byte           `json:"tls_cert_hash"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
 }
 
 func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults {
@@ -247,12 +303,11 @@ func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransaction
 			a.CreatorIDBytes,
 			a.CreatorNonce,
 			a.EnvelopeSignature,
-			a.ChaincodeProposalInput,
-			a.TxResponseStatus,
-			a.TxResponseMessage,
-			a.TxResponsePayload,
-			a.PayloadProposalHash,
 			a.PayloadExtension,
+			a.ChannelVersion,
+			a.ChannelID,
+			a.Epoch,
+			a.TlsCertHash,
 			a.CreatedAt,
 		}
 		batch.Queue(insertTransaction, vals...)

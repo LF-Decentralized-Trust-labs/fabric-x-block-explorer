@@ -9,6 +9,7 @@ package blockpipeline
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,7 +33,9 @@ type writerTestEnv struct {
 	done chan error
 }
 
-func startBlockWriter(ctx context.Context) writerTestEnv {
+//nolint:revive // t precedes ctx to enable t.Helper() marking.
+func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv {
+	t.Helper()
 	s := writerTestEnv{
 		in:   make(chan *types.ProcessedBlock, 10),
 		done: make(chan error, 1),
@@ -44,10 +47,12 @@ func startBlockWriter(ctx context.Context) writerTestEnv {
 
 func TestBlockWriter(t *testing.T) {
 	t.Parallel()
+	testCtx, testCancel := context.WithTimeout(t.Context(), time.Minute)
+	t.Cleanup(testCancel)
 
 	t.Run("returns nil on closed channel", func(t *testing.T) {
 		t.Parallel()
-		s := startBlockWriter(t.Context())
+		s := startBlockWriter(t, t.Context())
 		close(s.in)
 		require.NoError(t, <-s.done)
 	})
@@ -62,7 +67,7 @@ func TestBlockWriter(t *testing.T) {
 	t.Run("skips nil block", func(t *testing.T) {
 		// A nil entry must be skipped; otherwise WriteProcessedBlock would error.
 		t.Parallel()
-		s := startBlockWriter(t.Context())
+		s := startBlockWriter(t, t.Context())
 		s.in <- nil
 		close(s.in)
 		require.NoError(t, <-s.done)
@@ -72,7 +77,7 @@ func TestBlockWriter(t *testing.T) {
 		// db.NewBlockWriter(nil) has no pool/conn, so beginTx returns
 		// "no pool or conn available". BlockWriter must wrap it as "db write error".
 		t.Parallel()
-		s := startBlockWriter(t.Context())
+		s := startBlockWriter(t, t.Context())
 		s.in <- newProcessedBlock(1)
 		err := <-s.done
 		require.Error(t, err)
@@ -81,8 +86,9 @@ func TestBlockWriter(t *testing.T) {
 
 	t.Run("returns context error on cancellation", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithCancel(t.Context())
-		s := startBlockWriter(ctx)
+		ctx, cancel := context.WithCancel(testCtx)
+		t.Cleanup(cancel)
+		s := startBlockWriter(t, ctx)
 		cancel()
 		assert.ErrorIs(t, <-s.done, context.Canceled)
 	})

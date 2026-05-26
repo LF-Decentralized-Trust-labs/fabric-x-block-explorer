@@ -8,8 +8,7 @@ package blockpipeline
 
 import (
 	"context"
-
-	"github.com/cockroachdb/errors"
+	"fmt"
 
 	"github.com/hyperledger/fabric-x-committer/utils/channel"
 
@@ -32,7 +31,7 @@ func blockWriter(ctx context.Context, persister *db.BlockWriter, in channel.Read
 		}
 		if err := persister.WriteProcessedBlock(ctx, processedBlock); err != nil {
 			logger.Warnf("blockWriter stopped: %v", err)
-			return errors.Wrap(err, "db write error")
+			return fmt.Errorf("db write error: %w", err)
 		}
 	}
 	logger.Info("blockWriter stopping")

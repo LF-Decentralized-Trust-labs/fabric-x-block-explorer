@@ -11,7 +11,7 @@ import (
 	"os"
 	"testing"
 
-	committerdbtest "github.com/hyperledger/fabric-x-committer/service/vc/dbtest"
+	"github.com/hyperledger/fabric-x-committer/utils/testdb"
 )
 
 // TestMain sets package-wide environment variables before any test runs.
@@ -26,10 +26,10 @@ import (
 func TestMain(m *testing.M) {
 	for k, v := range map[string]string{
 		"DB_DEPLOYMENT": "local",
-		"DB_TYPE":       committerdbtest.PostgresDBType,
+		"DB_TYPE":       testdb.PostgresDBType,
 	} {
 		if err := os.Setenv(k, v); err != nil {
-			log.Fatal(err) //nolint:revive // os.Exit semantics; t is not available in TestMain
+			log.Fatal(err) //nolint:revive,nolintlint // os.Exit semantics; t is not available in TestMain
 		}
 	}
 	m.Run()

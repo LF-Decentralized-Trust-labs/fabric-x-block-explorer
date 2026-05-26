@@ -15,9 +15,10 @@ import (
 
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
 	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
-)
+	retrypkg "github.com/hyperledger/fabric-x-committer/utils/retry"
 
-const defaultMaxConns = 20
+	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
+)
 
 // Config holds PostgreSQL connection configuration.
 type Config struct {
@@ -32,13 +33,13 @@ type Config struct {
 	// MaxConnLifetime is the maximum total lifetime of a connection; 0 uses the default (1h).
 	MaxConnLifetime time.Duration
 	// Retry controls connection retries; when nil a single attempt is made.
-	Retry *connection.RetryProfile
+	Retry *retrypkg.Profile
 }
 
 // NewPostgres creates a new pgx connection pool using the given config.
 func NewPostgres(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 	if cfg.MaxConns <= 0 {
-		cfg.MaxConns = defaultMaxConns
+		cfg.MaxConns = config.DefaultDBMaxConns
 	}
 
 	dsn, err := dbconn.DataSourceName(dbconn.DataSourceNameParams{
@@ -70,17 +71,17 @@ func applyPoolLimits(poolCfg *pgxpool.Config, cfg Config) {
 	if cfg.MaxConnIdleTime > 0 {
 		poolCfg.MaxConnIdleTime = cfg.MaxConnIdleTime
 	} else {
-		poolCfg.MaxConnIdleTime = 5 * time.Minute
+		poolCfg.MaxConnIdleTime = config.DefaultDBMaxConnIdleTime
 	}
 	if cfg.MaxConnLifetime > 0 {
 		poolCfg.MaxConnLifetime = cfg.MaxConnLifetime
 	} else {
-		poolCfg.MaxConnLifetime = time.Hour
+		poolCfg.MaxConnLifetime = config.DefaultDBMaxConnLifetime
 	}
 }
 
 func connectWithRetry(
-	ctx context.Context, poolCfg *pgxpool.Config, retry *connection.RetryProfile,
+	ctx context.Context, poolCfg *pgxpool.Config, retry *retrypkg.Profile,
 ) (*pgxpool.Pool, error) {
 	var pool *pgxpool.Pool
 	connect := func() error {
@@ -96,7 +97,7 @@ func connectWithRetry(
 		return nil
 	}
 	if retry != nil {
-		return pool, retry.Execute(ctx, connect)
+		return pool, retrypkg.Execute(ctx, retry, connect)
 	}
 	return pool, connect()
 }

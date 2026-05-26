@@ -12,7 +12,7 @@ import (
 )
 
 const getReadWritesByBlockTxRange = `-- name: GetReadWritesByBlockTxRange :many
-SELECT tx_num, ns_id, key, read_version, value
+SELECT tx_num, ns_id, seq_num, key, read_version, value
 FROM tx_read_writes
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
 ORDER BY tx_num, ns_id, seq_num
@@ -27,6 +27,7 @@ type GetReadWritesByBlockTxRangeParams struct {
 type GetReadWritesByBlockTxRangeRow struct {
 	TxNum       int64       `json:"tx_num"`
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Key         []byte      `json:"key"`
 	ReadVersion pgtype.Int8 `json:"read_version"`
 	Value       []byte      `json:"value"`
@@ -44,6 +45,7 @@ func (q *Queries) GetReadWritesByBlockTxRange(ctx context.Context, arg GetReadWr
 		if err := rows.Scan(
 			&i.TxNum,
 			&i.NsID,
+			&i.SeqNum,
 			&i.Key,
 			&i.ReadVersion,
 			&i.Value,
@@ -59,7 +61,7 @@ func (q *Queries) GetReadWritesByBlockTxRange(ctx context.Context, arg GetReadWr
 }
 
 const getReadWritesByTx = `-- name: GetReadWritesByTx :many
-SELECT ns_id, key, read_version, value
+SELECT ns_id, seq_num, key, read_version, value
 FROM tx_read_writes
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, seq_num
@@ -72,6 +74,7 @@ type GetReadWritesByTxParams struct {
 
 type GetReadWritesByTxRow struct {
 	NsID        string      `json:"ns_id"`
+	SeqNum      int32       `json:"seq_num"`
 	Key         []byte      `json:"key"`
 	ReadVersion pgtype.Int8 `json:"read_version"`
 	Value       []byte      `json:"value"`
@@ -88,6 +91,7 @@ func (q *Queries) GetReadWritesByTx(ctx context.Context, arg GetReadWritesByTxPa
 		var i GetReadWritesByTxRow
 		if err := rows.Scan(
 			&i.NsID,
+			&i.SeqNum,
 			&i.Key,
 			&i.ReadVersion,
 			&i.Value,

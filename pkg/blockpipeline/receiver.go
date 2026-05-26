@@ -23,5 +23,11 @@ import (
 // Reconnection on transient errors is the caller's responsibility.
 func blockReceiver(ctx context.Context, streamer *sidecarstream.Streamer, out channel.Writer[*common.Block]) error {
 	logger.Info("blockReceiver started")
-	return streamer.Deliver(ctx, out)
+	err := streamer.Deliver(ctx, out)
+	if err != nil {
+		logger.Warnf("blockReceiver stopped: %v", err)
+	} else {
+		logger.Info("blockReceiver stopping")
+	}
+	return err
 }

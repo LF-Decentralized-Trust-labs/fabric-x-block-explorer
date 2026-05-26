@@ -1,3 +1,7 @@
+-- Migration 001: initial schema
+-- Creates all tables required by the block explorer.
+-- This is the single canonical migration; schema.sql and this file are kept in sync.
+
 CREATE TABLE IF NOT EXISTS blocks (
     block_num           BIGINT PRIMARY KEY,
     -- tx_count is the number of transactions persisted from this block.

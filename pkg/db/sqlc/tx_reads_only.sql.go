@@ -12,7 +12,7 @@ import (
 )
 
 const getReadsOnlyByBlockTxRange = `-- name: GetReadsOnlyByBlockTxRange :many
-SELECT tx_num, ns_id, key, version
+SELECT tx_num, ns_id, seq_num, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num >= $2 AND tx_num < $3
 ORDER BY tx_num, ns_id, seq_num
@@ -27,6 +27,7 @@ type GetReadsOnlyByBlockTxRangeParams struct {
 type GetReadsOnlyByBlockTxRangeRow struct {
 	TxNum   int64       `json:"tx_num"`
 	NsID    string      `json:"ns_id"`
+	SeqNum  int32       `json:"seq_num"`
 	Key     []byte      `json:"key"`
 	Version pgtype.Int8 `json:"version"`
 }
@@ -43,6 +44,7 @@ func (q *Queries) GetReadsOnlyByBlockTxRange(ctx context.Context, arg GetReadsOn
 		if err := rows.Scan(
 			&i.TxNum,
 			&i.NsID,
+			&i.SeqNum,
 			&i.Key,
 			&i.Version,
 		); err != nil {
@@ -57,7 +59,7 @@ func (q *Queries) GetReadsOnlyByBlockTxRange(ctx context.Context, arg GetReadsOn
 }
 
 const getReadsOnlyByTx = `-- name: GetReadsOnlyByTx :many
-SELECT ns_id, key, version
+SELECT ns_id, seq_num, key, version
 FROM tx_reads_only
 WHERE block_num = $1 AND tx_num = $2
 ORDER BY ns_id, seq_num
@@ -70,6 +72,7 @@ type GetReadsOnlyByTxParams struct {
 
 type GetReadsOnlyByTxRow struct {
 	NsID    string      `json:"ns_id"`
+	SeqNum  int32       `json:"seq_num"`
 	Key     []byte      `json:"key"`
 	Version pgtype.Int8 `json:"version"`
 }
@@ -83,7 +86,12 @@ func (q *Queries) GetReadsOnlyByTx(ctx context.Context, arg GetReadsOnlyByTxPara
 	items := []GetReadsOnlyByTxRow{}
 	for rows.Next() {
 		var i GetReadsOnlyByTxRow
-		if err := rows.Scan(&i.NsID, &i.Key, &i.Version); err != nil {
+		if err := rows.Scan(
+			&i.NsID,
+			&i.SeqNum,
+			&i.Key,
+			&i.Version,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

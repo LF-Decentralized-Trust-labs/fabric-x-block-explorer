@@ -54,14 +54,6 @@ func Int32ToNullableInt4(v int) pgtype.Int4 {
 	return pgtype.Int4{Int32: int32(v), Valid: true} //nolint:gosec // v is already int
 }
 
-// Int32PtrToNullableInt2 converts *int32 to pgtype.Int2.
-func Int32PtrToNullableInt2(v *int32) pgtype.Int2 {
-	if v == nil {
-		return pgtype.Int2{Valid: false}
-	}
-	return pgtype.Int2{Int16: int16(*v), Valid: true} //nolint:gosec // transaction types fit in int16
-}
-
 // Int32PtrToNullableInt4 converts *int32 to pgtype.Int4.
 func Int32PtrToNullableInt4(v *int32) pgtype.Int4 {
 	if v == nil {
@@ -82,4 +74,21 @@ func Int64ToNullableTimestamp(v *int64) pgtype.Timestamp {
 		Valid:            true,
 		InfinityModifier: pgtype.Finite,
 	}
+}
+
+// NullableTimestampToTimePtr converts a pgtype.Timestamp to *time.Time in UTC.
+func NullableTimestampToTimePtr(v pgtype.Timestamp) *time.Time {
+	if !v.Valid {
+		return nil
+	}
+	t := v.Time.UTC()
+	return &t
+}
+
+// NullableInt4ToInt32Ptr converts a pgtype.Int4 to *int32.
+func NullableInt4ToInt32Ptr(v pgtype.Int4) *int32 {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Int32
 }

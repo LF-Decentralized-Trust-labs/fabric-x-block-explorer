@@ -35,3 +35,29 @@ func (q *Queries) GetNamespacePolicies(ctx context.Context, namespace string) ([
 	}
 	return items, nil
 }
+
+const listAllNamespacePolicies = `-- name: ListAllNamespacePolicies :many
+SELECT DISTINCT ON (namespace) namespace, version, policy
+FROM namespace_policies
+ORDER BY namespace, version DESC
+`
+
+func (q *Queries) ListAllNamespacePolicies(ctx context.Context) ([]NamespacePolicy, error) {
+	rows, err := q.db.Query(ctx, listAllNamespacePolicies)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NamespacePolicy{}
+	for rows.Next() {
+		var i NamespacePolicy
+		if err := rows.Scan(&i.Namespace, &i.Version, &i.Policy); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

@@ -27,4 +27,4 @@ services:
     # Allows the explorer to reach a sidecar running on the host machine.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["start"]
+    command: ["start", "--config", "config.docker.yaml"]

@@ -9,13 +9,24 @@ import (
 )
 
 type Block struct {
-	BlockNum     int64            `json:"block_num"`
-	TxCount      int32            `json:"tx_count"`
-	PreviousHash []byte           `json:"previous_hash"`
-	DataHash     []byte           `json:"data_hash"`
-	BlockHash    []byte           `json:"block_hash"`
-	BlockSize    pgtype.Int4      `json:"block_size"`
-	CreatedAt    pgtype.Timestamp `json:"created_at"`
+	BlockNum           int64            `json:"block_num"`
+	TxCount            int32            `json:"tx_count"`
+	PreviousHash       []byte           `json:"previous_hash"`
+	DataHash           []byte           `json:"data_hash"`
+	BlockSize          pgtype.Int4      `json:"block_size"`
+	CreatedAt          pgtype.Timestamp `json:"created_at"`
+	MetadataSignatures []byte           `json:"metadata_signatures"`
+	LastConfigIndex    pgtype.Int8      `json:"last_config_index"`
+	TxStatusCodes      []byte           `json:"tx_status_codes"`
+	CommitHash         []byte           `json:"commit_hash"`
+}
+
+type BlockEnvelopeError struct {
+	BlockNum       int64  `json:"block_num"`
+	TxNum          int64  `json:"tx_num"`
+	ValidationCode string `json:"validation_code"`
+	RawEnvelope    []byte `json:"raw_envelope"`
+	TxID           []byte `json:"tx_id"`
 }
 
 type NamespacePolicy struct {
@@ -25,23 +36,22 @@ type NamespacePolicy struct {
 }
 
 type Transaction struct {
-	BlockNum               int64            `json:"block_num"`
-	TxNum                  int64            `json:"tx_num"`
-	TxID                   []byte           `json:"tx_id"`
-	ValidationCode         int16            `json:"validation_code"`
-	TxType                 pgtype.Int2      `json:"tx_type"`
-	ChaincodeName          pgtype.Text      `json:"chaincode_name"`
-	CreatorMspID           pgtype.Text      `json:"creator_msp_id"`
-	CreatorIDBytes         []byte           `json:"creator_id_bytes"`
-	CreatorNonce           []byte           `json:"creator_nonce"`
-	EnvelopeSignature      []byte           `json:"envelope_signature"`
-	ChaincodeProposalInput []byte           `json:"chaincode_proposal_input"`
-	TxResponseStatus       pgtype.Int4      `json:"tx_response_status"`
-	TxResponseMessage      pgtype.Text      `json:"tx_response_message"`
-	TxResponsePayload      []byte           `json:"tx_response_payload"`
-	PayloadProposalHash    []byte           `json:"payload_proposal_hash"`
-	PayloadExtension       []byte           `json:"payload_extension"`
-	CreatedAt              pgtype.Timestamp `json:"created_at"`
+	BlockNum          int64            `json:"block_num"`
+	TxNum             int64            `json:"tx_num"`
+	TxID              []byte           `json:"tx_id"`
+	ValidationCode    string           `json:"validation_code"`
+	TxType            pgtype.Text      `json:"tx_type"`
+	ChaincodeName     pgtype.Text      `json:"chaincode_name"`
+	CreatorMspID      pgtype.Text      `json:"creator_msp_id"`
+	CreatorIDBytes    []byte           `json:"creator_id_bytes"`
+	CreatorNonce      []byte           `json:"creator_nonce"`
+	EnvelopeSignature []byte           `json:"envelope_signature"`
+	PayloadExtension  []byte           `json:"payload_extension"`
+	ChannelVersion    pgtype.Int4      `json:"channel_version"`
+	ChannelID         pgtype.Text      `json:"channel_id"`
+	Epoch             pgtype.Int8      `json:"epoch"`
+	TlsCertHash       []byte           `json:"tls_cert_hash"`
+	CreatedAt         pgtype.Timestamp `json:"created_at"`
 }
 
 type TxBlindWrite struct {
