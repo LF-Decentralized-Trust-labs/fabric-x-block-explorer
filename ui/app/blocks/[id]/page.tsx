@@ -40,10 +40,7 @@ export default function BlockDetailPage() {
     try {
       const [height, data] = await Promise.all([
         api.getBlockHeight(),
-        api.getBlock(blockNumber, {
-          txLimit: txPageSize,
-          txOffset: txPage * txPageSize,
-        }),
+        api.getBlock(blockNumber),
       ]);
       setBlockHeight(height.height);
       setBlock(data);

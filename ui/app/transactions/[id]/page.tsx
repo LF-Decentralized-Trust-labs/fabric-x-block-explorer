@@ -12,6 +12,7 @@ import { ArrowLeft, Check, Copy, FileText, Shield, Database, KeyRound } from 'lu
 import Link from 'next/link';
 import { MetricCard } from '@/components/explorer/MetricCard';
 import { EmptyState } from '@/components/explorer/EmptyState';
+import { HexField } from '@/components/explorer/HexField';
 
 export default function TransactionDetailPage() {
   const params = useParams();
@@ -151,6 +152,47 @@ export default function TransactionDetailPage() {
                 </Badge>
               </dd>
             </div>
+
+            {transaction.chaincode_name && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Chaincode</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.chaincode_name}</dd>
+              </div>
+            )}
+
+            {transaction.channel_id && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Channel</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">{transaction.channel_id}</dd>
+              </div>
+            )}
+
+            {transaction.created_at && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Timestamp</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">
+                  {new Date(transaction.created_at).toLocaleString(undefined, {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                  })}
+                  <span className="ml-2 text-[#858585] text-xs font-mono">({transaction.created_at})</span>
+                </dd>
+              </div>
+            )}
+
+            {transaction.creator_msp_id && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Creator MSP</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.creator_msp_id}</dd>
+              </div>
+            )}
+
+            {transaction.tx_type && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Tx Type</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.tx_type}</dd>
+              </div>
+            )}
           </dl>
         </CardContent>
       </Card>
@@ -165,10 +207,13 @@ export default function TransactionDetailPage() {
               <div className="space-y-4">
                 {transaction.read_writes.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3">
-                    <div className="grid gap-1.5 text-sm">
-                      <p><span className="text-[#858585]">Namespace:</span> <span className="text-[#e8e8e8]">{row.namespace}</span></p>
-                      <p className="break-all"><span className="text-[#858585]">Key:</span> <span className="font-mono text-[#e8e8e8]">{row.key}</span></p>
-                      <p className="break-all"><span className="text-[#858585]">Value:</span> <span className="font-mono text-[#e8e8e8]">{row.value || '∅'}</span></p>
+                    <div className="grid gap-2 text-sm">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      </div>
+                      <HexField label="Key" hex={row.key} />
+                      <HexField label="Value" hex={row.value} showDeleted />
                     </div>
                   </div>
                 ))}
@@ -188,9 +233,14 @@ export default function TransactionDetailPage() {
               <div className="space-y-4">
                 {transaction.blind_writes.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3 text-sm">
-                    <p><span className="text-[#858585]">Namespace:</span> <span className="text-[#e8e8e8]">{row.namespace}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Key:</span> <span className="font-mono text-[#e8e8e8]">{row.key}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Value:</span> <span className="font-mono text-[#e8e8e8]">{row.value || '∅'}</span></p>
+                    <div className="grid gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      </div>
+                      <HexField label="Key" hex={row.key} />
+                      <HexField label="Value" hex={row.value} showDeleted />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -211,8 +261,13 @@ export default function TransactionDetailPage() {
               <div className="space-y-4">
                 {transaction.reads_only.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3 text-sm">
-                    <p><span className="text-[#858585]">Namespace:</span> <span className="text-[#e8e8e8]">{row.namespace}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Key:</span> <span className="font-mono text-[#e8e8e8]">{row.key}</span></p>
+                    <div className="grid gap-2">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      </div>
+                      <HexField label="Key" hex={row.key} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -234,7 +289,7 @@ export default function TransactionDetailPage() {
                     <p><span className="text-[#858585]">Namespace:</span> <span className="text-[#e8e8e8]">{endorsement.namespace}</span></p>
                     <p className="mt-1.5"><span className="text-[#858585]">MSP ID:</span> <span className="text-[#e8e8e8]">{endorsement.msp_id || '—'}</span></p>
                     <p className="mt-1.5 break-all"><span className="text-[#858585]">Endorsement:</span> <span className="font-mono text-[#e8e8e8]">{endorsement.endorsement || '∅'}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Identity:</span> <span className="font-mono text-[#e8e8e8]">{endorsement.identity || '∅'}</span></p>
+                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Certificate ID:</span> <span className="font-mono text-[#e8e8e8]">{endorsement.certificate_id || '∅'}</span></p>
                   </div>
                 ))}
               </div>

@@ -14,60 +14,79 @@ const apiClient = axios.create({
 
 // ── Backend response shapes ──────────────────────────────────────────────────
 
-interface RestRead {
-  id: number;
+interface RestReadOnly {
   ns_id: string;
   key: string;
-  is_read_write: boolean;
 }
 
-interface RestWrite {
-  id: number;
+interface RestReadWrite {
   ns_id: string;
   key: string;
   value: string;
-  is_blind_write: boolean;
+}
+
+interface RestBlindWrite {
+  ns_id: string;
+  key: string;
+  value: string;
 }
 
 interface RestEndorsement {
-  id: number;
-  ns_id: string;
+  msp_id: string;
   endorsement: string;
+  identity: {
+    mspid: string;
+    certificate_id: string;
+  } | null;
 }
 
 interface RestTransaction {
-  id: number;
+  block_num: number;
   tx_num: number;
   tx_id: string;
-  validation_code: number;
-  reads?: RestRead[];
-  writes?: RestWrite[];
+  validation_code: string;
+  chaincode_name: string;
+  creator_msp_id: string;
+  channel_id: string;
+  created_at: string;
+  namespaces: string[];
+  read_writes?: RestReadWrite[];
+  blind_writes?: RestBlindWrite[];
+  reads_only?: RestReadOnly[];
   endorsements?: RestEndorsement[];
 }
 
 interface RestBlock {
   block_num: number;
   tx_count: number;
+  block_size: number;
+  created_at: string;
   previous_hash: string;
   data_hash: string;
+  tx_status_codes: string[];
+  commit_hash: string;
   transactions?: RestTransaction[];
 }
 
-interface RestTxWithBlock {
-  transaction: RestTransaction;
-  block: {
-    block_num: number;
-    tx_count: number;
-    previous_hash: string;
-    data_hash: string;
-  };
+interface RestBlockListResponse {
+  blocks: RestBlock[];
+  offset: number;
+  limit: number;
+  has_more: boolean;
 }
 
 interface RestNamespacePolicy {
-  id: number;
   namespace: string;
   version: number;
-  policy: { policy_bytes?: string } | null;
+  policy: string;
+  certificates: string[];
+  msp_ids: string[];
+  endpoints: string[];
+  hash_algorithm: string;
+}
+
+interface RestPoliciesResponse {
+  policies: RestNamespacePolicy[];
 }
 
 // ── Public types used by UI components ──────────────────────────────────────
@@ -77,6 +96,8 @@ export interface BlockSummary {
   previous_hash: string;
   data_hash: string;
   transaction_count: number;
+  block_size: number;
+  created_at: string;
 }
 
 export interface Block extends BlockSummary {
@@ -103,15 +124,21 @@ export interface BlindWriteRecord {
 export interface EndorsementRecord {
   namespace: string;
   endorsement: string;
-  identity: string;
-  msp_id?: string;
+  msp_id: string;
+  certificate_id: string;
 }
 
 export interface Transaction {
   tx_id: string;
   block_number: number;
   tx_index: number;
-  validation_code: number;
+  validation_code: string;
+  tx_type: string | null;
+  chaincode_name: string | null;
+  creator_msp_id: string | null;
+  channel_id: string;
+  created_at: string;
+  namespaces: string[];
   blind_writes: BlindWriteRecord[];
   endorsements: EndorsementRecord[];
   read_writes: ReadWriteRecord[];
@@ -121,7 +148,11 @@ export interface Transaction {
 export interface NamespacePolicy {
   namespace: string;
   version: number;
-  policy_bytes: string;
+  policy: string;
+  certificates: string[];
+  msp_ids: string[];
+  endpoints: string[];
+  hash_algorithm: string;
 }
 
 export interface BlockHeight {
@@ -145,38 +176,45 @@ const transformBlockSummary = (b: RestBlock): BlockSummary => ({
   previous_hash: b.previous_hash,
   data_hash: b.data_hash,
   transaction_count: b.tx_count,
+  block_size: b.block_size ?? 0,
+  created_at: b.created_at ?? '',
 });
 
-const transformTransaction = (tx: RestTransaction, blockNum: number): Transaction => ({
+const transformTransaction = (tx: RestTransaction): Transaction => ({
   tx_id: tx.tx_id,
-  block_number: blockNum,
+  block_number: tx.block_num,
   tx_index: tx.tx_num,
   validation_code: tx.validation_code,
-  read_writes: (tx.writes ?? [])
-    .filter((w) => !w.is_blind_write)
-    .map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
-  blind_writes: (tx.writes ?? [])
-    .filter((w) => w.is_blind_write)
-    .map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
-  reads_only: (tx.reads ?? [])
-    .filter((r) => !r.is_read_write)
-    .map((r) => ({ namespace: r.ns_id, key: r.key })),
+  tx_type: tx.tx_type ?? null,
+  chaincode_name: tx.chaincode_name ?? null,
+  creator_msp_id: tx.creator_msp_id ?? null,
+  channel_id: tx.channel_id ?? '',
+  created_at: tx.created_at ?? '',
+  namespaces: tx.namespaces ?? [],
+  read_writes: (tx.read_writes ?? []).map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
+  blind_writes: (tx.blind_writes ?? []).map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
+  reads_only: (tx.reads_only ?? []).map((r) => ({ namespace: r.ns_id, key: r.key })),
   endorsements: (tx.endorsements ?? []).map((e) => ({
-    namespace: e.ns_id,
+    namespace: '',
     endorsement: e.endorsement,
-    identity: '',
+    msp_id: e.msp_id,
+    certificate_id: e.identity?.certificate_id ?? '',
   })),
 });
 
 const transformBlock = (b: RestBlock): Block => ({
   ...transformBlockSummary(b),
-  transactions: (b.transactions ?? []).map((tx) => transformTransaction(tx, b.block_num)),
+  transactions: (b.transactions ?? []).map((tx) => transformTransaction(tx)),
 });
 
 const transformPolicy = (p: RestNamespacePolicy): NamespacePolicy => ({
   namespace: p.namespace,
   version: p.version,
-  policy_bytes: p.policy?.policy_bytes ?? '',
+  policy: p.policy ?? '',
+  certificates: p.certificates ?? [],
+  msp_ids: p.msp_ids ?? [],
+  endpoints: p.endpoints ?? [],
+  hash_algorithm: p.hash_algorithm ?? '',
 });
 
 // ── API client ────────────────────────────────────────────────────────────────
@@ -188,41 +226,25 @@ export const api = {
   },
 
   healthCheck: async (): Promise<{ status: string }> => {
-    await apiClient.get('/healthz');
+    await apiClient.get('/blocks/height');
     return { status: 'online' };
   },
 
-  getBlock: async (
-    blockNumber: number,
-    options?: { txLimit?: number; txOffset?: number }
-  ): Promise<Block> => {
-    const res = await apiClient.get<RestBlock>(`/blocks/${blockNumber}`, {
-      params: {
-        limitTx: options?.txLimit,
-        offsetTx: options?.txOffset,
-      },
-    });
+  getBlock: async (blockNumber: number): Promise<Block> => {
+    const res = await apiClient.get<RestBlock>(`/blocks/${blockNumber}`);
     return transformBlock(res.data);
   },
 
   getLatestBlocks: async (count: number = 8): Promise<BlockSummary[]> => {
     const { height } = await api.getBlockHeight();
-    const from = Math.max(0, height - count + 1);
-    const fetches = [];
-    for (let n = height; n >= from; n--) {
-      fetches.push(apiClient.get<RestBlock>(`/blocks/${n}`));
-    }
-    const results = await Promise.all(fetches);
-    return results.map((r) => transformBlockSummary(r.data));
+    const offset = Math.max(0, height - count + 1);
+    const res = await apiClient.get<RestBlockListResponse>('/blocks', { params: { offset, limit: count } });
+    return (res.data.blocks ?? []).map(transformBlockSummary).reverse();
   },
 
   listBlocks: async (params: { offset: number; limit: number }): Promise<BlockSummary[]> => {
-    const fetches = [];
-    for (let n = params.offset + params.limit - 1; n >= params.offset; n--) {
-      fetches.push(apiClient.get<RestBlock>(`/blocks/${n}`));
-    }
-    const results = await Promise.all(fetches);
-    return results.map((r) => transformBlockSummary(r.data));
+    const res = await apiClient.get<RestBlockListResponse>('/blocks', { params });
+    return (res.data.blocks ?? []).map(transformBlockSummary);
   },
 
   getBlockPage: async (page: number, pageSize: number): Promise<BlockPage> => {
@@ -235,19 +257,17 @@ export const api = {
     }
 
     const lowestBlock = Math.max(0, highestBlock - pageSize + 1);
-    const fetches = [];
-    for (let n = highestBlock; n >= lowestBlock; n--) {
-      fetches.push(apiClient.get<RestBlock>(`/blocks/${n}`));
-    }
-    const results = await Promise.all(fetches);
-    const blocks = results.map((r) => transformBlockSummary(r.data));
+    const offset = lowestBlock;
+    const limit = highestBlock - lowestBlock + 1;
+    const res = await apiClient.get<RestBlockListResponse>('/blocks', { params: { offset, limit } });
+    const blocks = (res.data.blocks ?? []).map(transformBlockSummary).reverse();
 
     return { height, page, page_size: pageSize, total_pages: totalPages, highest_block: highestBlock, lowest_block: lowestBlock, blocks };
   },
 
   getTransaction: async (txId: string): Promise<Transaction> => {
-    const res = await apiClient.get<RestTxWithBlock>(`/tx/${txId}`);
-    return transformTransaction(res.data.transaction, res.data.block.block_num);
+    const res = await apiClient.get<RestTransaction>(`/transactions/${txId}`);
+    return transformTransaction(res.data);
   },
 
   getRecentTransactions: async (count: number = 12): Promise<Transaction[]> => {
@@ -255,7 +275,7 @@ export const api = {
     const transactions: Transaction[] = [];
 
     for (let n = height; n >= 0 && transactions.length < count; n--) {
-      const block = await api.getBlock(n, { txLimit: Math.max(1, count - transactions.length) });
+      const block = await api.getBlock(n);
       if (block.transactions.length > 0) {
         transactions.push(...block.transactions);
       }
@@ -266,8 +286,8 @@ export const api = {
   },
 
   getPolicies: async (namespace: string): Promise<NamespacePolicy[]> => {
-    const res = await apiClient.get<RestNamespacePolicy[]>(`/policies/${namespace}`);
-    return (res.data ?? []).map(transformPolicy);
+    const res = await apiClient.get<RestPoliciesResponse>(`/namespaces/${namespace}/policies`);
+    return (res.data.policies ?? []).map(transformPolicy);
   },
 };
 
