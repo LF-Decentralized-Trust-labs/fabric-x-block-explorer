@@ -16,22 +16,28 @@ const apiClient = axios.create({
 
 interface RestReadOnly {
   ns_id: string;
+  seq_num: number;
   key: string;
 }
 
 interface RestReadWrite {
   ns_id: string;
+  seq_num: number;
   key: string;
-  value: string;
+  read_version: number | null;
+  value: string | null;
 }
 
 interface RestBlindWrite {
   ns_id: string;
+  seq_num: number;
   key: string;
-  value: string;
+  value: string | null;
 }
 
 interface RestEndorsement {
+  ns_id: string;
+  seq_num: number;
   msp_id: string;
   endorsement: string;
   identity: {
@@ -40,16 +46,29 @@ interface RestEndorsement {
   } | null;
 }
 
+interface RestNamespace {
+  ns_id: string;
+  ns_version: number;
+}
+
 interface RestTransaction {
   block_num: number;
   tx_num: number;
   tx_id: string;
   validation_code: string;
-  chaincode_name: string;
-  creator_msp_id: string;
+  tx_type: string | null;
+  chaincode_name: string | null;
+  creator_msp_id: string | null;
+  creator_identity: string | null;
+  creator_nonce: string | null;
+  envelope_signature: string | null;
+  payload_extension: string | null;
+  channel_version: number | null;
   channel_id: string;
+  epoch: number | null;
+  tls_cert_hash: string | null;
   created_at: string;
-  namespaces: string[];
+  namespaces: RestNamespace[];
   read_writes?: RestReadWrite[];
   blind_writes?: RestBlindWrite[];
   reads_only?: RestReadOnly[];
@@ -60,12 +79,15 @@ interface RestBlock {
   block_num: number;
   tx_count: number;
   block_size: number;
-  created_at: string;
-  previous_hash: string;
+  created_at: string | null;
+  previous_hash: string | null;
   data_hash: string;
+  metadata_signatures: string | null;
+  last_config_index: number | null;
   tx_status_codes: string[];
   commit_hash: string;
   transactions?: RestTransaction[];
+  envelope_errors?: string[];
 }
 
 interface RestBlockListResponse {
@@ -93,38 +115,53 @@ interface RestPoliciesResponse {
 
 export interface BlockSummary {
   block_number: number;
-  previous_hash: string;
+  previous_hash: string | null;
   data_hash: string;
   transaction_count: number;
   block_size: number;
-  created_at: string;
+  created_at: string | null;
+  tx_status_codes: string[];
+  commit_hash: string;
+  metadata_signatures: string | null;
+  last_config_index: number | null;
 }
 
 export interface Block extends BlockSummary {
   transactions: Transaction[];
+  envelope_errors: string[];
 }
 
 export interface ReadWriteRecord {
   namespace: string;
+  seq_num: number;
   key: string;
-  value: string;
+  read_version: number | null;
+  value: string | null;
 }
 
 export interface ReadRecord {
   namespace: string;
+  seq_num: number;
   key: string;
 }
 
 export interface BlindWriteRecord {
   namespace: string;
+  seq_num: number;
   key: string;
-  value: string;
+  value: string | null;
+}
+
+export interface NamespaceRecord {
+  ns_id: string;
+  ns_version: number;
 }
 
 export interface EndorsementRecord {
-  namespace: string;
-  endorsement: string;
+  ns_id: string;
+  seq_num: number;
   msp_id: string;
+  endorsement: string;
   certificate_id: string;
 }
 
@@ -136,9 +173,16 @@ export interface Transaction {
   tx_type: string | null;
   chaincode_name: string | null;
   creator_msp_id: string | null;
+  creator_identity: string | null;
+  creator_nonce: string | null;
+  envelope_signature: string | null;
+  payload_extension: string | null;
+  channel_version: number | null;
   channel_id: string;
+  epoch: number | null;
+  tls_cert_hash: string | null;
   created_at: string;
-  namespaces: string[];
+  namespaces: NamespaceRecord[];
   blind_writes: BlindWriteRecord[];
   endorsements: EndorsementRecord[];
   read_writes: ReadWriteRecord[];
@@ -173,11 +217,15 @@ export interface BlockPage {
 
 const transformBlockSummary = (b: RestBlock): BlockSummary => ({
   block_number: b.block_num,
-  previous_hash: b.previous_hash,
+  previous_hash: b.previous_hash ?? null,
   data_hash: b.data_hash,
   transaction_count: b.tx_count,
   block_size: b.block_size ?? 0,
-  created_at: b.created_at ?? '',
+  created_at: b.created_at ?? null,
+  tx_status_codes: b.tx_status_codes ?? [],
+  commit_hash: b.commit_hash ?? '',
+  metadata_signatures: b.metadata_signatures ?? null,
+  last_config_index: b.last_config_index ?? null,
 });
 
 const transformTransaction = (tx: RestTransaction): Transaction => ({
@@ -188,16 +236,35 @@ const transformTransaction = (tx: RestTransaction): Transaction => ({
   tx_type: tx.tx_type ?? null,
   chaincode_name: tx.chaincode_name ?? null,
   creator_msp_id: tx.creator_msp_id ?? null,
+  creator_identity: tx.creator_identity ?? null,
+  creator_nonce: tx.creator_nonce ?? null,
+  envelope_signature: tx.envelope_signature ?? null,
+  payload_extension: tx.payload_extension ?? null,
+  channel_version: tx.channel_version ?? null,
   channel_id: tx.channel_id ?? '',
+  epoch: tx.epoch ?? null,
+  tls_cert_hash: tx.tls_cert_hash ?? null,
   created_at: tx.created_at ?? '',
-  namespaces: tx.namespaces ?? [],
-  read_writes: (tx.read_writes ?? []).map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
-  blind_writes: (tx.blind_writes ?? []).map((w) => ({ namespace: w.ns_id, key: w.key, value: w.value })),
-  reads_only: (tx.reads_only ?? []).map((r) => ({ namespace: r.ns_id, key: r.key })),
+  namespaces: (tx.namespaces ?? []).map((n) => ({ ns_id: n.ns_id, ns_version: n.ns_version })),
+  read_writes: (tx.read_writes ?? []).map((w) => ({
+    namespace: w.ns_id,
+    seq_num: w.seq_num,
+    key: w.key,
+    read_version: w.read_version ?? null,
+    value: w.value ?? null,
+  })),
+  blind_writes: (tx.blind_writes ?? []).map((w) => ({
+    namespace: w.ns_id,
+    seq_num: w.seq_num,
+    key: w.key,
+    value: w.value ?? null,
+  })),
+  reads_only: (tx.reads_only ?? []).map((r) => ({ namespace: r.ns_id, seq_num: r.seq_num, key: r.key })),
   endorsements: (tx.endorsements ?? []).map((e) => ({
-    namespace: '',
-    endorsement: e.endorsement,
+    ns_id: e.ns_id,
+    seq_num: e.seq_num,
     msp_id: e.msp_id,
+    endorsement: e.endorsement,
     certificate_id: e.identity?.certificate_id ?? '',
   })),
 });
@@ -205,6 +272,7 @@ const transformTransaction = (tx: RestTransaction): Transaction => ({
 const transformBlock = (b: RestBlock): Block => ({
   ...transformBlockSummary(b),
   transactions: (b.transactions ?? []).map((tx) => transformTransaction(tx)),
+  envelope_errors: b.envelope_errors ?? [],
 });
 
 const transformPolicy = (p: RestNamespacePolicy): NamespacePolicy => ({

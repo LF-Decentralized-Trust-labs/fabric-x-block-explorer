@@ -193,6 +193,86 @@ export default function TransactionDetailPage() {
                 <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.tx_type}</dd>
               </div>
             )}
+
+            {transaction.channel_version !== null && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Channel Version</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.channel_version}</dd>
+              </div>
+            )}
+
+            {transaction.epoch !== null && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Epoch</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.epoch}</dd>
+              </div>
+            )}
+
+            {transaction.namespaces.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Namespaces</dt>
+                <dd className="sm:col-span-2 flex flex-wrap gap-2">
+                  {transaction.namespaces.map((ns) => (
+                    <span key={ns.ns_id} className="inline-flex items-center gap-1 rounded border border-[#454545] bg-[#2d2d2d] px-2 py-0.5 text-xs font-mono">
+                      <span className="text-[#9cdcfe]">{ns.ns_id}</span>
+                      <span className="text-[#858585]">v{ns.ns_version}</span>
+                    </span>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cryptographic Fields</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="space-y-4">
+            {transaction.creator_nonce && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Creator Nonce</dt>
+                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.creator_nonce}</dd>
+              </div>
+            )}
+
+            {transaction.creator_identity && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Creator Identity</dt>
+                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
+                  {transaction.creator_identity.length > 80
+                    ? `${transaction.creator_identity.slice(0, 40)}…${transaction.creator_identity.slice(-8)}`
+                    : transaction.creator_identity}
+                </dd>
+              </div>
+            )}
+
+            {transaction.envelope_signature && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Envelope Signature</dt>
+                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
+                  {transaction.envelope_signature.length > 80
+                    ? `${transaction.envelope_signature.slice(0, 40)}…${transaction.envelope_signature.slice(-8)}`
+                    : transaction.envelope_signature}
+                </dd>
+              </div>
+            )}
+
+            {transaction.payload_extension && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Payload Extension</dt>
+                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.payload_extension}</dd>
+              </div>
+            )}
+
+            {transaction.tls_cert_hash && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">TLS Cert Hash</dt>
+                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.tls_cert_hash}</dd>
+              </div>
+            )}
           </dl>
         </CardContent>
       </Card>
@@ -208,9 +288,15 @@ export default function TransactionDetailPage() {
                 {transaction.read_writes.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3">
                     <div className="grid gap-2 text-sm">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
-                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                          <span className="text-[#e8e8e8]">{row.namespace}</span>
+                        </div>
+                        <span className="text-[#858585] text-xs font-mono">seq#{row.seq_num}</span>
+                        {row.read_version !== null && (
+                          <span className="text-[#858585] text-xs font-mono">rv:{row.read_version}</span>
+                        )}
                       </div>
                       <HexField label="Key" hex={row.key} />
                       <HexField label="Value" hex={row.value} showDeleted />
@@ -234,9 +320,12 @@ export default function TransactionDetailPage() {
                 {transaction.blind_writes.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3 text-sm">
                     <div className="grid gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
-                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                          <span className="text-[#e8e8e8]">{row.namespace}</span>
+                        </div>
+                        <span className="text-[#858585] text-xs font-mono">seq#{row.seq_num}</span>
                       </div>
                       <HexField label="Key" hex={row.key} />
                       <HexField label="Value" hex={row.value} showDeleted />
@@ -262,9 +351,12 @@ export default function TransactionDetailPage() {
                 {transaction.reads_only.map((row, index) => (
                   <div key={`${row.key}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3 text-sm">
                     <div className="grid gap-2">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[#858585] text-xs font-medium">Namespace</span>
-                        <span className="text-[#e8e8e8]">{row.namespace}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-0.5 flex-1">
+                          <span className="text-[#858585] text-xs font-medium">Namespace</span>
+                          <span className="text-[#e8e8e8]">{row.namespace}</span>
+                        </div>
+                        <span className="text-[#858585] text-xs font-mono">seq#{row.seq_num}</span>
                       </div>
                       <HexField label="Key" hex={row.key} />
                     </div>
@@ -286,10 +378,13 @@ export default function TransactionDetailPage() {
               <div className="space-y-4">
                 {transaction.endorsements.map((endorsement, index) => (
                   <div key={`${endorsement.endorsement}-${index}`} className="rounded-md border border-[#606060] bg-[#3c3c3c] p-3 text-sm">
-                    <p><span className="text-[#858585]">Namespace:</span> <span className="text-[#e8e8e8]">{endorsement.namespace}</span></p>
-                    <p className="mt-1.5"><span className="text-[#858585]">MSP ID:</span> <span className="text-[#e8e8e8]">{endorsement.msp_id || '—'}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Endorsement:</span> <span className="font-mono text-[#e8e8e8]">{endorsement.endorsement || '∅'}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Certificate ID:</span> <span className="font-mono text-[#e8e8e8]">{endorsement.certificate_id || '∅'}</span></p>
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-[#858585] text-xs">ns:{endorsement.ns_id}</span>
+                      <span className="text-[#858585] text-xs font-mono">seq#{endorsement.seq_num}</span>
+                    </div>
+                    <p><span className="text-[#858585]">MSP ID:</span> <span className="text-[#e8e8e8]">{endorsement.msp_id || '—'}</span></p>
+                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Endorsement:</span> <span className="font-mono text-[#ce9178] text-xs">{endorsement.endorsement ? `${endorsement.endorsement.slice(0,40)}…` : '∅'}</span></p>
+                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Certificate ID:</span> <span className="font-mono text-xs text-[#e8e8e8]">{endorsement.certificate_id || '∅'}</span></p>
                   </div>
                 ))}
               </div>

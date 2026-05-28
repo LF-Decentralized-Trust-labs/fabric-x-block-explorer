@@ -11,7 +11,7 @@ import { Activity, ArrowDownUp, ArrowLeft, ArrowRight, BookOpen, ChevronDown, Ch
 import Link from 'next/link';
 import { MetricCard } from '@/components/explorer/MetricCard';
 import { HashValue } from '@/components/explorer/HashValue';
-import { formatNumber, getValidationCodeText, getValidationTone, pluralize } from '@/lib/utils';
+import { formatNumber, formatBytes, getValidationCodeText, getValidationTone, pluralize } from '@/lib/utils';
 
 type TxSortDirection = 'asc' | 'desc';
 
@@ -110,8 +110,65 @@ export default function BlockDetailPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <MetricCard title="Block number" value={`#${block.block_number}`} subtitle="Selected block identifier." icon={Layers} accent="blue" />
         <MetricCard title="Transactions" value={formatNumber(block.transaction_count)} subtitle="Total transactions recorded in this block." icon={Activity} accent="emerald" />
-        <MetricCard title="Tx page" value={`${txPage + 1} / ${totalTxPages}`} subtitle="Server-side transaction pagination using tx_offset and tx_limit." icon={BookOpen} accent="violet" />
+        <MetricCard title="Block size" value={formatBytes(block.block_size)} subtitle="Serialised envelope size stored on-chain." icon={BookOpen} accent="violet" />
       </section>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Block Information</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="space-y-4">
+            {block.created_at && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Timestamp</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">
+                  {new Date(block.created_at).toLocaleString(undefined, {
+                    year: 'numeric', month: 'short', day: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                  })}
+                  <span className="ml-2 text-[#858585] text-xs font-mono">({block.created_at})</span>
+                </dd>
+              </div>
+            )}
+            {block.last_config_index !== null && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Last Config Index</dt>
+                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{block.last_config_index}</dd>
+              </div>
+            )}
+            {block.commit_hash && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#858585]">Commit Hash</dt>
+                <dd className="sm:col-span-2"><HashValue value={block.commit_hash} fullWidth copyable /></dd>
+              </div>
+            )}
+            {block.tx_status_codes.length > 0 && (() => {
+              const committed = block.tx_status_codes.filter(c => c === 'COMMITTED').length;
+              const aborted = block.tx_status_codes.length - committed;
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <dt className="text-sm font-medium text-[#858585]">Tx Status Summary</dt>
+                  <dd className="sm:col-span-2 text-sm flex gap-3">
+                    <span className="text-[#89d185]">{committed} committed</span>
+                    {aborted > 0 && <span className="text-[#f48771]">{aborted} aborted</span>}
+                  </dd>
+                </div>
+              );
+            })()}
+            {block.envelope_errors && block.envelope_errors.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <dt className="text-sm font-medium text-[#f48771]">Envelope Errors</dt>
+                <dd className="sm:col-span-2 space-y-1">
+                  {block.envelope_errors.map((err, i) => (
+                    <p key={i} className="text-sm text-[#f48771] font-mono">{err}</p>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -175,8 +232,19 @@ export default function BlockDetailPage() {
                       <Badge variant={getValidationTone(tx.validation_code)}>
                         {getValidationCodeText(tx.validation_code)}
                       </Badge>
+                      {tx.chaincode_name && (
+                        <span className="text-xs text-[#858585] font-mono">cc:{tx.chaincode_name}</span>
+                      )}
                     </div>
                     <HashValue value={tx.tx_id} />
+                    {tx.created_at && (
+                      <p className="text-xs text-[#858585]">
+                        {new Date(tx.created_at).toLocaleString(undefined, {
+                          month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        })}
+                      </p>
+                    )}
                     <p className="text-xs text-[#858585]">
                       {tx.read_writes.length + tx.blind_writes.length} {pluralize(tx.read_writes.length + tx.blind_writes.length, 'write')} • {tx.endorsements.length} endorsements
                     </p>

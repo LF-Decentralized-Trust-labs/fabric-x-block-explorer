@@ -22,6 +22,14 @@ export function formatNumber(value: number): string {
   return new Intl.NumberFormat('en-US').format(value);
 }
 
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const k = 1024;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 export function truncateMiddle(value: string, start: number = 10, end: number = 8): string {
   if (!value) {
     return '';

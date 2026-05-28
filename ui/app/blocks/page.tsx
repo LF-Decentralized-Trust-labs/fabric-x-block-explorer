@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { MetricCard } from '@/components/explorer/MetricCard';
 import { HashValue } from '@/components/explorer/HashValue';
-import { formatNumber } from '@/lib/utils';
+import { formatNumber, formatBytes } from '@/lib/utils';
 
 const BLOCKS_PER_PAGE = 5;
 
@@ -165,7 +165,18 @@ export default function BlocksPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-semibold text-[#75beff]">#{block.block_number}</span>
                         <Badge variant="info">{formatNumber(block.transaction_count)} {block.transaction_count === 1 ? 'tx' : 'txs'}</Badge>
+                        {block.block_size > 0 && (
+                          <span className="text-xs text-[#858585]">{formatBytes(block.block_size)}</span>
+                        )}
                       </div>
+                      {block.created_at && (
+                        <p className="text-xs text-[#9cdcfe]">
+                          {new Date(block.created_at).toLocaleString(undefined, {
+                            year: 'numeric', month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit', second: '2-digit',
+                          })}
+                        </p>
+                      )}
                       <div className="space-y-1">
                         <p className="text-xs text-[#858585]">
                           <span className="mr-1.5">Data:</span>
