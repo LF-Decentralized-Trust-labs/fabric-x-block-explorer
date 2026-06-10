@@ -11,6 +11,8 @@ servers:
     description: Local development server
 
 tags:
+  - name: System
+    description: Service health and metadata
   - name: Blocks
     description: Block-level queries
   - name: Transactions
@@ -19,6 +21,26 @@ tags:
     description: Namespace policy queries
 
 paths:
+  /healthz:
+    get:
+      summary: Liveness health check
+      operationId: healthz
+      tags: [System]
+      responses:
+        "200":
+          description: Service is alive
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  service:
+                    type: string
+                    example: fabric-x-block-explorer
+
   /blocks/height:
     get:
       summary: Get current block height

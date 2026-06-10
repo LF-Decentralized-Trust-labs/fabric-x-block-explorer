@@ -43,6 +43,7 @@ func newValidationError(format string, args ...any) error {
 
 // newRESTRouter registers all REST endpoints.
 //
+//	GET /healthz                     (liveness probe)
 //	GET /blocks/height
 //	GET /blocks                      ?from=&to=&limit=&offset=
 //	GET /blocks/{block_num}          ?tx_limit=&tx_offset=
@@ -51,6 +52,7 @@ func newValidationError(format string, args ...any) error {
 //	GET /namespaces/{namespace}/policies
 func (s *Service) newRESTRouter() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", handleHealthz)
 	mux.HandleFunc("GET /blocks/height", s.handleGetBlockHeight)
 	mux.HandleFunc("GET /blocks", s.handleListBlocks)
 	mux.HandleFunc("GET /blocks/{block_num}", s.handleGetBlockByNumber)
@@ -88,6 +90,18 @@ func corsMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// handleHealthz is a fast liveness probe — it returns 200 OK immediately
+// without touching the database or any external dependency. Docker Compose
+// and Kubernetes use this route to decide whether the container is alive.
+//
+// Go 1.22+ ServeMux: registering "GET /healthz" also matches HEAD, so
+// `wget --spider` and other HEAD-based probes work out of the box.
+func handleHealthz(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"status":"ok","service":"fabric-x-block-explorer"}`))
 }
 
 // loggingResponseWriter captures the status code written by a handler.

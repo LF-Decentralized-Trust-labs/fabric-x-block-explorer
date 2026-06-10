@@ -1,13 +1,13 @@
 # Fabric-X Block Explorer
 
-A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric-X sidecar, writes indexed data into PostgreSQL, and exposes a REST API for querying blocks, transactions, and namespace policies. A Next.js web UI is included in the `ui/` directory and served as a separate container (or dev server).
+A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks from a Fabric-X sidecar, writes indexed data into PostgreSQL, and exposes a REST API for querying blocks, transactions, and namespace policies. A Next.js web UI is included in the `ui/` directory.
 
 ```
 ┌─────────────────┐     gRPC      ┌──────────────────┐     SQL      ┌────────────┐
 │  Fabric-X       │  ──────────►  │  Explorer        │  ─────────►  │ PostgreSQL │
 │  Sidecar        │               │  (Go binary)     │  ◄─────────  │            │
 └─────────────────┘               └────────┬─────────┘              └────────────┘
-                                           │ REST :8080
+                                           │ REST :8080 / :18080
                                            ▼
                                   ┌──────────────────┐
                                   │  Next.js UI      │
@@ -19,87 +19,92 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 
 ## Requirements
 
-| Tool | Version | Notes |
+| Tool | Version | Purpose |
 |---|---|---|
-| Go | 1.21+ | For building the explorer binary |
-| Node.js | 18+ | For the UI dev server or production build |
+| Go | 1.26+ | Build the explorer binary |
+| Node.js | 18+ | UI dev server / production build |
 | npm | 9+ | UI package manager |
-| Docker | any | Required for `docker compose` stack and DB tests |
-| `docker compose` / `docker-compose` | v2 recommended | Used by `make run`, `make live-up`, etc. |
-| `curl` + `python3` | any | Used by smoke test targets |
+| Docker | 28+ | All container-based workflows |
+| `docker-compose` or `docker compose` | v2 recommended | Docker Compose stack |
+| `curl` + `python3` | any | REST smoke tests |
+| `jq` | any | Self-contained live stack (`make dev`) |
 
 ---
 
-## Quickstart — Full Stack with Docker Compose
+## Option 1 — One-command local E2E (recommended for development)
 
-The easiest way to run the entire system (PostgreSQL + Explorer + UI) in one command. You still need a running Fabric-X sidecar to stream blocks from.
+Starts a **fully self-contained stack** — no external sidecar needed. Spins up:
+
+- A **Fabric-X committer test node** (generates real blocks with load)
+- A **PostgreSQL** instance
+- The **explorer binary** (ingesting blocks via gRPC)
+- The **Next.js UI dev server** (hot-reload)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer.git
-cd fabric-x-block-explorer
+make dev
+```
 
-# 2. Edit config.docker.yaml to set your sidecar host/port if needed.
-#    By default the explorer inside Docker reaches the sidecar via
-#    host.docker.internal:4001 (i.e. port 4001 on your host machine).
+Once everything is running:
 
-# 3. Start postgres + explorer + UI
-docker compose up --build
+| Service | URL |
+|---|---|
+| Explorer REST API | http://127.0.0.1:18080 |
+| Swagger UI | http://127.0.0.1:18080/docs |
+| UI | http://localhost:3000 |
 
-# Services once running:
+To stop everything:
+
+```bash
+make dev-down
+```
+
+> **Note:** On first run `make dev` downloads the committer test-node Docker image
+> (~500 MB) and runs `npm ci`. Subsequent runs are fast.
+
+---
+
+## Option 2 — Docker Compose (production-like, needs an external sidecar)
+
+Runs the full stack (PostgreSQL + explorer + UI) in Docker containers. You must have a running Fabric-X sidecar reachable on your host machine (default port `4001`).
+
+```bash
+# Start postgres + explorer + UI
+docker-compose up --build
+
+# Services:
 #   postgres  → localhost:5432
 #   explorer  → http://localhost:8080   (REST API + Swagger at /docs)
-#   ui        → http://localhost:3000   (web interface)
+#   ui        → http://localhost:3000
 
-# 4. Tear down
-docker compose down -v
+# Tear down
+docker-compose down -v
 ```
 
-The `ui` container proxies all `/api/*` requests to the `explorer` container automatically via Next.js route rewrites — no extra browser-side configuration needed.
+The sidecar endpoint is set in `config.docker.yaml`. By default it points to `host.docker.internal:4001` (port 4001 on your host machine).
 
 ---
 
-## Quickstart — Self-contained Live Stack (no external sidecar)
+## Option 3 — Manual local setup (each component separately)
 
-For a fully self-contained environment including a Fabric-X committer test node:
+Use this if you want full control, or are running your own Fabric-X sidecar.
+
+### Step 1 — Build the explorer binary
 
 ```bash
-# Start the full stack, run smoke tests, and open Swagger UI
-make swagger
-
-# Tear down when done
-make live-stop
+make build
+# Binary → ./bin/explorer
 ```
 
-`make swagger` builds the explorer binary, starts the committer test node, postgres, and explorer via Docker Compose, waits for the REST API to respond, runs smoke tests against all endpoints, then opens `http://127.0.0.1:18080/docs` in your browser.
-
-To also run the UI against this stack:
+### Step 2 — Start PostgreSQL
 
 ```bash
-# In a second terminal, after make swagger has finished
-cd ui && npm ci                                    # first time only
-BACKEND_URL=http://127.0.0.1:18080 npm run dev
-# UI → http://localhost:3000
-```
-
----
-
-## Quickstart — Local Development (all components separate)
-
-### 1. Start PostgreSQL
-
-```bash
-# Starts a postgres container on port 5433 using the committer project helper
 make start-db
+# Starts postgres in Docker on port 5433
 ```
 
-### 2. Configure the Explorer
+### Step 3 — Start the explorer backend
 
-`config.local.yaml` is pre-configured for local dev:
-- PostgreSQL → `localhost:5433`
-- Fabric-X sidecar → `localhost:4001` (start your sidecar separately)
-
-### 3. Start the Explorer Backend
+`config.local.yaml` is pre-configured for local dev (postgres on `:5433`, sidecar on `:4001`):
 
 ```bash
 go run ./cmd/explorer start --config config.local.yaml
@@ -107,15 +112,15 @@ go run ./cmd/explorer start --config config.local.yaml
 # Swagger  → http://127.0.0.1:8080/docs
 ```
 
-### 4. Start the UI Dev Server
+### Step 4 — Start the UI
 
 ```bash
-make ui-install                                   # npm ci inside ui/ (first time only)
-BACKEND_URL=http://127.0.0.1:8080 make ui-dev    # starts Next.js with hot-reload
+make ui-install                                    # npm ci inside ui/ (first time only)
+BACKEND_URL=http://127.0.0.1:8080 make ui-dev     # Next.js dev server with hot-reload
 # UI → http://localhost:3000
 ```
 
-`BACKEND_URL` is used only at dev-server startup to configure the Next.js API proxy. The browser never hits the backend directly — all requests go through `/api/*` on the Next.js server, which rewrites them to `BACKEND_URL`.
+`BACKEND_URL` is used **only at server startup** to configure the Next.js API proxy. The browser never contacts the backend directly — all `/api/*` requests are proxied through Next.js.
 
 ---
 
@@ -124,61 +129,68 @@ BACKEND_URL=http://127.0.0.1:8080 make ui-dev    # starts Next.js with hot-reloa
 The explorer reads a YAML config file passed via `--config`. See `config.local.yaml` for a fully annotated example.
 
 ### `database`
-| Field | Description |
-|---|---|
-| `endpoints[]` | PostgreSQL host/port pairs |
-| `user`, `password`, `dbname` | Connection credentials |
-| `max_conns` | Maximum connection pool size |
-| `max_conn_idle_time`, `max_conn_lifetime` | Pool eviction durations |
-| `retry` | Exponential back-off for initial connection |
-| `tls` | PostgreSQL TLS settings |
+
+| Field | Default | Description |
+|---|---|---|
+| `endpoints[]` | — | PostgreSQL `host:port` list |
+| `user`, `password`, `dbname` | — | Connection credentials |
+| `max_conns` | `20` | Connection pool size |
+| `max_conn_idle_time` | — | Pool eviction idle duration |
+| `max_conn_lifetime` | — | Pool eviction lifetime duration |
+| `retry` | — | Exponential back-off for initial connection |
+| `tls` | — | PostgreSQL TLS settings |
 
 ### `sidecar`
-| Field | Description |
-|---|---|
-| `connection.endpoint` | Fabric-X sidecar `host:port` |
-| `connection.tls.mode` | `none` (plaintext), `tls` (server-auth), `mtls` (mutual TLS) |
-| `connection.tls.ca_cert_paths[]` | CA cert(s) — required for `tls` / `mtls` |
-| `connection.tls.cert_path` | Client certificate — `mtls` only |
-| `connection.tls.key_path` | Client private key — `mtls` only |
-| `start_block` | Block number to begin streaming from (default `0`) |
+
+| Field | Default | Description |
+|---|---|---|
+| `connection.endpoint` | — | Fabric-X sidecar `host:port` |
+| `connection.tls.mode` | `none` | `none`, `tls` (server-auth), or `mtls` (mutual TLS) |
+| `connection.tls.ca-cert-paths[]` | — | CA certificate(s) — required for `tls` / `mtls` |
+| `connection.tls.cert-path` | — | Client certificate — `mtls` only |
+| `connection.tls.key-path` | — | Client private key — `mtls` only |
+| `start_block` | `0` | First block number to stream from |
 
 ### `buffer`
-| Field | Description |
-|---|---|
-| `raw_channel_size` | Raw-block channel capacity between receiver and processor |
-| `proc_channel_size` | Processed-block channel capacity between processor and writer |
+
+| Field | Default | Description |
+|---|---|---|
+| `raw_channel_size` | `500` | Raw-block channel capacity (receiver → processor) |
+| `proc_channel_size` | `500` | Processed-block channel capacity (processor → writer) |
 
 ### `workers`
-| Field | Description |
-|---|---|
-| `processor_count` | Number of block processor goroutines |
-| `writer_count` | Number of DB writer goroutines |
+
+| Field | Default | Description |
+|---|---|---|
+| `processor_count` | `4` | Parallel block processor goroutines |
+| `writer_count` | `4` | Parallel DB writer goroutines |
 
 ### `server.rest`
-| Field | Description |
-|---|---|
-| `endpoint` | REST bind address, e.g. `127.0.0.1:8080` |
-| `read_header_timeout` | Maximum time to read request headers |
-| `read_timeout` | Maximum time to read the full request |
-| `write_timeout` | Maximum time to write a response |
-| `shutdown_timeout` | Graceful shutdown drain time |
-| `default_tx_limit` | Default page size for transactions in block detail responses |
+
+| Field | Default | Description |
+|---|---|---|
+| `endpoint` | `127.0.0.1:8080` | REST bind address |
+| `read_header_timeout` | `10s` | Max time to read request headers |
+| `read_timeout` | — | Max time to read the full request |
+| `write_timeout` | — | Max time to write a response |
+| `shutdown_timeout` | — | Graceful shutdown drain time |
+| `default_tx_limit` | `50` | Default page size for transactions in block responses |
 
 ---
 
 ## REST API
 
-All responses are JSON. CORS is enabled on all endpoints (`Access-Control-Allow-Origin: *`). The OpenAPI spec and interactive Swagger UI are always available at `/openapi.yaml` and `/docs`.
+All responses are JSON. CORS is enabled (`Access-Control-Allow-Origin: *`). Interactive Swagger UI and the raw OpenAPI spec are always available.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/blocks/height` | Current stored block height |
-| `GET` | `/blocks` | List block summaries (`offset`, `limit`) |
-| `GET` | `/blocks/{block_num}` | Block detail with embedded transactions (`tx_limit`, `tx_offset`) |
+| `GET` | `/healthz` | Liveness probe — returns `{"status":"ok"}` instantly, no DB call |
+| `GET` | `/blocks/height` | Current block height |
+| `GET` | `/blocks` | Paginated block summaries (`offset`, `limit`) |
+| `GET` | `/blocks/{block_num}` | Block detail with embedded transactions |
 | `GET` | `/transactions/{tx_id}` | Transaction detail by hex tx ID |
-| `GET` | `/namespaces/policies` | Latest policy for every namespace in the DB |
-| `GET` | `/namespaces/{namespace}/policies` | All policy versions for a specific namespace, newest first |
+| `GET` | `/namespaces/policies` | Latest policy for every namespace |
+| `GET` | `/namespaces/{namespace}/policies` | All policy versions for a specific namespace |
 | `GET` | `/openapi.yaml` | OpenAPI 3.0 specification |
 | `GET` | `/docs` | Interactive Swagger UI |
 
@@ -186,71 +198,72 @@ All responses are JSON. CORS is enabled on all endpoints (`Access-Control-Allow-
 
 ## Web UI
 
-The UI (`ui/`) is a Next.js 14 app (App Router, TypeScript, Tailwind CSS).
+Next.js 14 app (App Router, TypeScript, Tailwind CSS) in the `ui/` directory.
 
 ### Pages
 
 | Route | Description |
 |---|---|
-| `/` | Dashboard — live block height, connection status, recent blocks |
-| `/blocks` | Paginated block list with sortable columns and block number search |
-| `/blocks/{num}` | Block detail — timestamp, size, tx status summary (committed/aborted counts), hashes, commit hash, paginated transaction list with chaincode and timestamp per row |
-| `/transactions/{id}` | Transaction detail — metadata (channel, chaincode, timestamp, MSP, namespaces), read/write sets with human-readable hex decode, blind writes, read-only rows, endorsements, cryptographic fields (nonce, signature, TLS cert hash) |
-| `/policies` | Namespace policy explorer |
+| `/` | Dashboard — block height, tx throughput chart, recent blocks, search |
+| `/blocks` | Paginated block list with sortable columns |
+| `/blocks/{num}` | Block detail — metadata, hashes, tx status summary, paginated tx list |
+| `/transactions/{id}` | Transaction detail — read/write sets, blind writes, endorsements, crypto fields |
+| `/policies` | Namespace policy explorer with human-readable decoded rules |
 
-### Hex Field Decoding
+### Hex Decoding
 
-Keys and values in Fabric read-write sets are raw bytes hex-encoded by the backend. The UI decodes them with the following priority:
+Keys and values in Fabric read-write sets are raw bytes hex-encoded by the backend. The UI auto-decodes them in priority order:
 
-1. **JSON** — if the bytes parse as a JSON object or array, renders a collapsible VS Code-style syntax-coloured JSON tree with a **Decoded JSON** badge and a Raw toggle button
-2. **UTF-8 text** — if the bytes are printable, renders the string in cyan with the raw hex shown below
-3. **Binary** — truncated orange hex string with a copy-to-clipboard button
+1. **JSON** — collapsible, syntax-highlighted JSON tree
+2. **UTF-8 text** — rendered as a readable string
+3. **Binary** — truncated hex with an expand/collapse toggle
 
 ---
 
 ## Make Targets
 
 ```
-make help                # Print all targets with descriptions
+make help              # Print all targets
 
-# Building
-make build               # Build the explorer binary → ./bin/explorer
+# ── One-command E2E ──────────────────────────────────────────────
+make dev               # 🚀 Build + committer/postgres/explorer + UI dev server
+make dev-down          # 🛑 Tear down everything started by make dev
 
-# Testing
-make test-no-db          # Tests that don't need a database (parser, config, pipeline, …)
-make test-requires-db    # DB tests — auto-starts postgres if needed
-make test-all            # All unit tests
-make test-integration    # Integration tests against a live committer test node
-make coverage            # Generate HTML coverage report → coverage/coverage.html
+# ── Building ─────────────────────────────────────────────────────
+make build             # Build ./bin/explorer
 
-# Database helpers
-make start-db            # Start a local postgres container on port 5433
-make ensure-db           # Start postgres if not running, create 'explorer' database
-make stop-db             # Remove the test postgres container
+# ── Testing ──────────────────────────────────────────────────────
+make test-no-db        # Tests that don't need a database
+make test-requires-db  # DB tests (auto-starts postgres)
+make test-all          # All unit tests
+make test-integration  # Integration tests (live committer + postgres)
+make coverage          # HTML coverage report → coverage/coverage.html
 
-# Docker Compose stack
-make run                 # Build and start postgres + explorer + ui (sidecar must be external)
-make run-down            # Stop and remove the stack
-make live-up             # Same as run (detached mode)
-make live-down           # Stop and remove stack + volumes
+# ── Database ─────────────────────────────────────────────────────
+make start-db          # Start postgres container on port 5433
+make ensure-db         # Start postgres if not running; create 'explorer' DB
+make stop-db           # Remove the test postgres container
 
-# Live smoke tests (full self-contained stack)
-make swagger             # Start full stack (committer + postgres + explorer), smoke-test, open Swagger
-make live-stop           # Tear down the stack started by make swagger
-make wait-rest           # Wait until the REST API responds at REST_BASE_URL
-make smoke-rest          # Call representative REST endpoints and fail on any bad response
-make smoke-live          # Recreate stack + wait-rest + smoke-rest in one shot
+# ── Docker Compose ───────────────────────────────────────────────
+make run               # Start postgres + explorer + UI (external sidecar needed)
+make run-down          # Stop and remove the stack
 
-# UI
-make ui-install          # npm ci inside ui/
-make ui-dev              # Start UI dev server (requires backend on :8080)
-make ui-build            # Production build of the UI
-make ui-lint             # Lint the UI source
+# ── Self-contained smoke tests ────────────────────────────────────
+make swagger           # Full stack + smoke tests + open Swagger UI
+make live-stop         # Tear down the stack started by make swagger
+make smoke-rest        # Call all REST endpoints and fail on bad responses
+make smoke-live        # Recreate stack + smoke-rest in one shot
 
-# Code generation & lint
-make sqlc                # Regenerate Go code from SQL via sqlc
-make check-sqlc          # Verify generated SQLC code is up to date
-make lint                # Run golangci-lint
+# ── UI ───────────────────────────────────────────────────────────
+make ui-install        # npm ci inside ui/
+make ui-dev            # Start UI dev server (backend must be on :8080)
+make ui-build          # Production build
+make ui-lint           # Lint UI source
+
+# ── Code generation & lint ────────────────────────────────────────
+make sqlc              # Regenerate Go code from SQL
+make check-sqlc        # Fail if generated SQLC code is out of sync
+make lint              # Run golangci-lint
 ```
 
 ---
@@ -259,35 +272,37 @@ make lint                # Run golangci-lint
 
 ```
 .
-├── cmd/explorer/           # Main entry point (cobra CLI)
+├── cmd/
+│   └── explorer/           # Binary entry point (cobra CLI: start, version)
 ├── pkg/
-│   ├── api/                # REST server, response types, policy decoder
-│   ├── blockpipeline/      # Receiver → processor → DB writer pipeline
-│   ├── cli/                # cobra commands
+│   ├── api/                # REST server, OpenAPI spec, policy decoder/renderer
+│   ├── blockpipeline/      # Receiver → processor → writer pipeline
+│   ├── cli/                # Cobra command definitions
 │   ├── config/             # YAML config loader and defaults
-│   ├── db/                 # PostgreSQL client, schema, sqlc generated code
-│   │   ├── queries/        # Raw SQL query files
+│   ├── db/                 # PostgreSQL pool, schema migrations, sqlc queries
+│   │   ├── migrations/     # SQL migration files
+│   │   ├── queries/        # Raw SQL query files (input to sqlc)
 │   │   └── sqlc/           # sqlc-generated Go code (do not edit manually)
 │   ├── parser/             # Fabric envelope parser (protobuf decode)
-│   ├── sidecarstream/      # gRPC block stream client
-│   ├── types/              # Shared domain types
-│   └── util/               # Helpers (nullable, ptr, …)
+│   ├── sidecarstream/      # gRPC block-stream client wrapping delivercommitter
+│   ├── types/              # Shared domain types (ProcessedBlock, etc.)
+│   └── util/               # Helpers (nullable, ptr)
 ├── ui/                     # Next.js 14 web interface
-│   ├── app/                # App Router pages
-│   │   ├── blocks/         # Block list + block detail
-│   │   ├── transactions/   # Transaction detail
-│   │   └── policies/       # Namespace policy viewer
+│   ├── app/                # App Router pages (/, /blocks, /transactions, /policies)
 │   ├── components/
-│   │   ├── explorer/       # Domain-specific (MetricCard, HexField, HashValue, …)
-│   │   └── ui/             # Generic (Button, Badge, Card, Loading, …)
+│   │   ├── explorer/       # Domain components: MetricCard, HexField, HashValue, EmptyState
+│   │   └── ui/             # Generic components: Button, Badge, Card, Loading, SearchInput
 │   ├── lib/
-│   │   ├── api.ts          # Typed REST client + transform layer
+│   │   ├── api.ts          # Typed REST client + response transform layer
+│   │   ├── policyDecoder.ts# Human-readable policy rule decoder
 │   │   └── utils.ts        # Hex decode, formatting, validation code helpers
 │   └── Dockerfile          # Multi-stage Next.js production image
-├── api/proto/              # Protobuf definitions
+├── scripts/
+│   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)
 ├── config.local.yaml       # Config for local dev (postgres :5433, sidecar :4001)
-├── docker-compose.yaml     # Unified stack: postgres + explorer + ui
-├── Dockerfile              # Explorer binary image
+├── config.docker.yaml      # Config for Docker Compose stack (sidecar via host.docker.internal)
+├── docker-compose.yaml     # Stack: postgres + explorer + ui
+├── Dockerfile              # Multi-stage explorer binary image
 ├── Makefile
 └── sqlc.yaml               # sqlc codegen configuration
 ```

@@ -96,7 +96,7 @@ export default function TransactionsPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
-            <CardTitle>Latest blocks</CardTitle>
+            <CardTitle>Recent transactions</CardTitle>
           </div>
         </CardHeader>
         <CardContent>

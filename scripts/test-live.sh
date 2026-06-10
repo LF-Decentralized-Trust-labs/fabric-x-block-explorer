@@ -126,8 +126,20 @@ fi
 EXPLORER_BIN=/tmp/fx-explorer
 [[ -f "$EXPLORER_BIN" ]] || { log "ERROR: binary $EXPLORER_BIN not found"; exit 1; }
 
-# 2. Clean up leftovers
+# 2. Clean up leftovers (containers + any stale explorer process holding the REST port)
 docker rm -f "$COMMITTER_CONTAINER" "$POSTGRES_CONTAINER" 2>/dev/null || true
+if [[ -f "$EXPLORER_PID_FILE" ]]; then
+  OLD_PID=$(cat "$EXPLORER_PID_FILE")
+  kill "$OLD_PID" 2>/dev/null || true
+  rm -f "$EXPLORER_PID_FILE"
+fi
+# Also kill any process still holding the REST port (e.g. from a --keep run)
+STALE_PID=$(lsof -t -i ":${EXPLORER_REST_PORT}" 2>/dev/null || true)
+if [[ -n "$STALE_PID" ]]; then
+  log "Killing stale process on port ${EXPLORER_REST_PORT} (PID $STALE_PID)..."
+  kill "$STALE_PID" 2>/dev/null || true
+  sleep 1
+fi
 
 # 3. Start explorer Postgres
 log "Starting explorer Postgres on host port $PG_HOST_PORT..."
@@ -246,6 +258,16 @@ get() {
   }
   echo "$resp"
 }
+
+# ── 0. Liveness health check
+echo ""
+echo "── 0. GET /healthz"
+HZ_STATUS=$(curl -so /dev/null -w "%{http_code}" "${EXPLORER_URL}/healthz")
+[[ "$HZ_STATUS" == "200" ]] && ok "GET /healthz → 200" || fail "GET /healthz → $HZ_STATUS"
+HZ_BODY=$(curl -sf "${EXPLORER_URL}/healthz" 2>/dev/null || echo "{}")
+echo "$HZ_BODY" | jq .
+echo "$HZ_BODY" | jq -e '.status == "ok"' >/dev/null \
+  && ok "healthz body: status=ok" || fail "healthz body missing status=ok"
 
 # ── 1. Block height
 echo ""
