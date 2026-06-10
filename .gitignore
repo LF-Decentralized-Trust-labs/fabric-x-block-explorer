@@ -22,3 +22,7 @@ nohup.out
 
 # Test coverage reports
 /coverage/
+# UI
+ui/node_modules/
+ui/.next/
+ui/tsconfig.tsbuildinfo

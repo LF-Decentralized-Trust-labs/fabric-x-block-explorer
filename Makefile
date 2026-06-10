@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node help
+.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node ui-install ui-dev ui-build ui-lint help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -216,6 +216,18 @@ swagger: build ## Build explorer, start full self-contained stack (committer + p
 
 live-stop: ## Tear down the live stack started by 'make swagger' or 'test-live.sh --keep'
 	bash scripts/test-live.sh --down
+
+ui-install: ## Install UI dependencies (npm ci)
+	cd ui && npm ci
+
+ui-dev: ## Run the UI in development mode (requires backend on :8080)
+	cd ui && npm run dev
+
+ui-build: ## Build the UI for production
+	cd ui && npm run build
+
+ui-lint: ## Lint the UI source
+	cd ui && npm run lint
 
 help: ## Display this help message
 	@echo "Fabric X Block Explorer - Makefile targets"
