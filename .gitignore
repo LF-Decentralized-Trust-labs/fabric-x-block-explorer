@@ -5,7 +5,7 @@ config.yaml
 config.local.yaml
 
 # Binaries
-explorer
+/explorer
 *.exe
 *.dll
 *.so

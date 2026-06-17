@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node ui-install ui-dev ui-build ui-lint help
+.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node ui-install ui-dev ui-build ui-lint dev help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -175,7 +175,7 @@ smoke-live: ensure-compose check-live-tools ## Recreate the live stack, wait for
 	@$(MAKE) smoke-rest
 	@echo "✅ Live REST smoke checks passed"
 
-run: ## Build and start postgres + explorer (sidecar must be running externally)
+run: ## Build and start postgres + explorer + UI (sidecar must be running externally)
 	@if [ -z "$(COMPOSE)" ]; then echo "❌ Neither 'docker compose' nor 'docker-compose' is available"; exit 1; fi
 	$(COMPOSE) up --build
 
@@ -228,6 +228,36 @@ ui-build: ## Build the UI for production
 
 ui-lint: ## Lint the UI source
 	cd ui && npm run lint
+
+dev: ## 🚀 One-command local E2E: build binary, start committer test node + postgres + explorer, install UI deps, launch UI dev server
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  Fabric-X Block Explorer — local E2E dev setup"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@echo "Step 1/2  Starting self-contained backend stack..."
+	@echo "          (builds binary, starts committer + postgres + explorer)"
+	@echo "          Logs → /tmp/fx-explorer-live.log  |  REST → http://127.0.0.1:18080"
+	@bash scripts/test-live.sh --keep
+	@echo ""
+	@echo "Step 2/2  Starting UI dev server..."
+	@if [ ! -d ui/node_modules ]; then \
+		echo "          Installing UI dependencies (npm ci)..."; \
+		cd ui && npm ci --silent; \
+	fi
+	@echo ""
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo "  ✅ Stack is live — open in your browser:"
+	@echo "     UI         → http://localhost:3000"
+	@echo "     REST API   → http://127.0.0.1:18080"
+	@echo "     Swagger    → http://127.0.0.1:18080/docs"
+	@echo "  Press Ctrl+C to stop the UI (run 'make dev-down' to stop the backend)"
+	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	@echo ""
+	@cd ui && BACKEND_URL=http://127.0.0.1:18080 npm run dev
+
+dev-down: ## 🛑 Tear down everything started by 'make dev'
+	@bash scripts/test-live.sh --down
+	@echo "✅ Backend stack stopped"
 
 help: ## Display this help message
 	@echo "Fabric X Block Explorer - Makefile targets"
