@@ -210,6 +210,20 @@ Next.js 14 app (App Router, TypeScript, Tailwind CSS) in the `ui/` directory.
 | `/transactions/{id}` | Transaction detail — read/write sets, blind writes, endorsements, crypto fields |
 | `/policies` | Namespace policy explorer with human-readable decoded rules |
 
+### Screenshots
+
+| Dashboard | Block list |
+|---|---|
+| ![Dashboard](docs/images/dashboard.png) | ![Blocks](docs/images/blocks.png) |
+
+| Block detail | Transaction detail |
+|---|---|
+| ![Block detail](docs/images/block-detail.png) | ![Transaction detail](docs/images/transaction-detail.png) |
+
+| Policies |
+|---|
+| ![Policies](docs/images/policies.png) |
+
 ### Hex Decoding
 
 Keys and values in Fabric read-write sets are raw bytes hex-encoded by the backend. The UI auto-decodes them in priority order:
