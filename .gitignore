@@ -1,5 +1,6 @@
 .DS_Store
 .vscode/
+.idea/
 # Configuration — local overrides (may contain passwords/endpoints)
 config.yaml
 config.local.yaml

@@ -84,6 +84,42 @@ The sidecar endpoint is set in `config.docker.yaml`. By default it points to `ho
 
 ---
 
+## Container Image
+
+The explorer is published as a multi-arch (amd64 + arm64) image to the GitHub Container Registry on every push to `main` and every `vX.Y.Z` tag (see [.github/workflows/release.yaml](.github/workflows/release.yaml)).
+
+```text
+ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer
+```
+
+| Tag | Meaning |
+|---|---|
+| `latest` | Tip of `main` |
+| `vX.Y.Z` | Tagged release |
+| `X.Y` | Latest patch of a minor release |
+| `sha-<short>` | A specific commit |
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+
+# Run it (expects PostgreSQL + a Fabric-X sidecar reachable from the container).
+# The image bundles config.docker.yaml and starts with it by default.
+docker run --rm -p 8080:8080 \
+  ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+```
+
+The image ships a container `HEALTHCHECK` that probes `GET /healthz`, so orchestrators (Docker Compose, Kubernetes) can wait for it to become healthy before routing traffic.
+
+Build and smoke-test it locally:
+
+```bash
+make docker-build     # builds fabric-x-block-explorer:<version>
+make docker-smoke     # builds, then runs the container and checks `explorer version`
+```
+
+---
+
 ## Option 3 — Manual local setup (each component separately)
 
 Use this if you want full control, or are running your own Fabric-X sidecar.
@@ -245,6 +281,8 @@ make dev-down          # 🛑 Tear down everything started by make dev
 
 # ── Building ─────────────────────────────────────────────────────
 make build             # Build ./bin/explorer
+make docker-build      # Build the explorer Docker image
+make docker-smoke      # Build the image + run a container smoke test
 
 # ── Testing ──────────────────────────────────────────────────────
 make test-no-db        # Tests that don't need a database

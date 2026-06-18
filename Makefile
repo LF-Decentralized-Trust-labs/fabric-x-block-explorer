@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node ui-install ui-dev ui-build ui-lint dev help
+.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node docker-build docker-smoke ui-install ui-dev ui-build ui-lint dev help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -20,11 +20,27 @@ VERSION            ?= $(shell git describe --tags --always --dirty 2>/dev/null |
 BINARY             := ./bin/explorer
 CLI_PKG            := github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli
 LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
+# Container image coordinates. EXPLORER_IMAGE is the local build tag;
+# EXPLORER_IMAGE_REPO is the registry path CI publishes to (see .github/workflows/release.yaml).
+EXPLORER_IMAGE_REPO ?= ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer
+EXPLORER_IMAGE      ?= fabric-x-block-explorer:$(VERSION)
 
 build: ## Build the explorer binary with version injection
 	@mkdir -p bin
 	go build $(LD_FLAGS) -o $(BINARY) ./cmd/explorer/
 	@echo "✅ Built $(BINARY) version=$(VERSION)"
+
+docker-build: ## Build the explorer Docker image (tagged $(EXPLORER_IMAGE))
+	docker build --build-arg VERSION=$(VERSION) -t $(EXPLORER_IMAGE) .
+	@echo "✅ Built image $(EXPLORER_IMAGE)"
+
+docker-smoke: docker-build ## Build the image, then verify the container entrypoint runs
+	@echo "Running container smoke test..."
+	@out="$$(docker run --rm $(EXPLORER_IMAGE) version 2>&1)"; \
+	echo "$$out"; \
+	echo "$$out" | grep -q "Block Explorer version" \
+		|| { echo "❌ unexpected version output from image"; exit 1; }
+	@echo "✅ Image smoke test passed"
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."
@@ -183,9 +199,11 @@ run-down: ## Stop and remove Docker Compose services and volumes
 	@if [ -z "$(COMPOSE)" ]; then echo "❌ Neither 'docker compose' nor 'docker-compose' is available"; exit 1; fi
 	$(COMPOSE) down -v
 
-build-test-node: ## Build the fabric-x-committer all-in-one test node Docker image
+build-test-node: ## Build (or pull) the fabric-x-committer all-in-one test node Docker image
 	@if docker image inspect $(TEST_NODE_IMAGE) >/dev/null 2>&1; then \
 		echo "✅ $(TEST_NODE_IMAGE) already present — skipping build"; \
+	elif docker pull $(TEST_NODE_IMAGE) >/dev/null 2>&1; then \
+		echo "✅ Pulled $(TEST_NODE_IMAGE) from registry"; \
 	else \
 		echo "⚡ Building committer-test-node from module cache (this takes a few minutes)..."; \
 		TMP=$$(mktemp -d); \
@@ -208,7 +226,12 @@ kill-test-docker: ## Stop and remove all sc_test_* Docker containers (test clean
 
 test-integration: ensure-db build-test-node ## Run integration tests (starts committer test node + explorer against live DB)
 	@echo "Running integration tests..."
-	gotestsum --rerun-fails=1 --format testname --packages ./pkg/integration/... -- -v -count=1 -timeout=10m
+	@if command -v gotestsum >/dev/null 2>&1; then \
+		gotestsum --rerun-fails=1 --format testname --packages ./pkg/integration/... -- -v -count=1 -timeout=10m; \
+	else \
+		echo "⚡ gotestsum not found — using 'go run gotest.tools/gotestsum@v1.12.0'"; \
+		go run gotest.tools/gotestsum@v1.12.0 --rerun-fails=1 --format testname --packages ./pkg/integration/... -- -v -count=1 -timeout=10m; \
+	fi
 
 swagger: build ## Build explorer, start full self-contained stack (committer + postgres + explorer), run smoke tests, then open Swagger UI
 	bash scripts/test-live.sh --keep
