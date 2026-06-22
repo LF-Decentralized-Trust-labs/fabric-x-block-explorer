@@ -18,7 +18,7 @@ export default function TransactionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const txId = params.id as string;
-  
+
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -241,10 +241,22 @@ export default function TransactionDetailPage() {
             {transaction.creator_identity && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <dt className="text-sm font-medium text-[#858585]">Creator Identity</dt>
-                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
-                  {transaction.creator_identity.length > 80
-                    ? `${transaction.creator_identity.slice(0, 40)}…${transaction.creator_identity.slice(-8)}`
-                    : transaction.creator_identity}
+                <dd className="sm:col-span-2 text-sm">
+                  <div className="space-y-2">
+                    {transaction.creator_identity.msp_id && (
+                      <p className="text-xs text-[#858585]">
+                        MSP ID: <span className="font-mono text-[#e8e8e8]">{transaction.creator_identity.msp_id}</span>
+                      </p>
+                    )}
+                    {transaction.creator_identity.certificate_pem && (
+                      <div className="flex items-start gap-1">
+                        <pre className="flex-1 overflow-x-auto rounded border border-[#454545] bg-[#2d2d2d] p-2 font-mono text-[11px] leading-relaxed text-[#ce9178] whitespace-pre-wrap break-all">
+                          {transaction.creator_identity.certificate_pem.trim()}
+                        </pre>
+                        <CopyButton text={transaction.creator_identity.certificate_pem} field="creator_identity" />
+                      </div>
+                    )}
+                  </div>
                 </dd>
               </div>
             )}
@@ -260,10 +272,26 @@ export default function TransactionDetailPage() {
               </div>
             )}
 
-            {transaction.payload_extension && (
+            {transaction.payload_extension?.chaincode_id && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <dt className="text-sm font-medium text-[#858585]">Payload Extension</dt>
-                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.payload_extension}</dd>
+                <dd className="sm:col-span-2 text-sm">
+                  <div className="flex flex-col gap-1 font-mono text-xs">
+                    <span>
+                      <span className="text-[#858585]">Chaincode:</span>{' '}
+                      <span className="text-[#9cdcfe]">{transaction.payload_extension.chaincode_id.name}</span>
+                      {transaction.payload_extension.chaincode_id.version && (
+                        <span className="text-[#858585]"> v{transaction.payload_extension.chaincode_id.version}</span>
+                      )}
+                    </span>
+                    {transaction.payload_extension.chaincode_id.path && (
+                      <span className="break-all">
+                        <span className="text-[#858585]">Path:</span>{' '}
+                        <span className="text-[#ce9178]">{transaction.payload_extension.chaincode_id.path}</span>
+                      </span>
+                    )}
+                  </div>
+                </dd>
               </div>
             )}
 
@@ -383,8 +411,8 @@ export default function TransactionDetailPage() {
                       <span className="text-[#858585] text-xs font-mono">seq#{endorsement.seq_num}</span>
                     </div>
                     <p><span className="text-[#858585]">MSP ID:</span> <span className="text-[#e8e8e8]">{endorsement.msp_id || '—'}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Endorsement:</span> <span className="font-mono text-[#ce9178] text-xs">{endorsement.endorsement ? `${endorsement.endorsement.slice(0,40)}…` : '∅'}</span></p>
-                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Certificate ID:</span> <span className="font-mono text-xs text-[#e8e8e8]">{endorsement.certificate_id || '∅'}</span></p>
+                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Endorsement:</span> <span className="font-mono text-[#ce9178] text-xs">{endorsement.endorsement ? `${endorsement.endorsement.slice(0, 40)}…` : '∅'}</span></p>
+                    <p className="mt-1.5 break-all"><span className="text-[#858585]">Certificate:</span> <span className="font-mono text-xs text-[#e8e8e8]">{endorsement.certificate ? `${endorsement.certificate.slice(0, 40)}…` : '∅'}</span></p>
                   </div>
                 ))}
               </div>
