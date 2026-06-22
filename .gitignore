@@ -4,6 +4,9 @@
 config.yaml
 config.local.yaml
 
+# Environment variables (may contain sensitive data)
+.env
+
 # Binaries
 /explorer
 *.exe

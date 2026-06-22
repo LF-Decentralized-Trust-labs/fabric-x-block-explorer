@@ -67,6 +67,8 @@ make dev-down
 
 Runs the full stack (PostgreSQL + explorer + UI) in Docker containers. You must have a running Fabric-X sidecar reachable on your host machine (default port `4001`).
 
+### Quick Start
+
 ```bash
 # Start postgres + explorer + UI
 docker-compose up --build
@@ -76,11 +78,64 @@ docker-compose up --build
 #   explorer  → http://localhost:8080   (REST API + Swagger at /docs)
 #   ui        → http://localhost:3000
 
-# Tear down
+# Tear down (keeps data)
+docker-compose down
+
+# Tear down and remove volumes (deletes all data)
 docker-compose down -v
 ```
 
 The sidecar endpoint is set in `config.docker.yaml`. By default it points to `host.docker.internal:4001` (port 4001 on your host machine).
+
+### Environment Variables
+
+The Docker Compose stack supports environment variables for configuration. Copy `.env.example` to `.env` and customize:
+
+```bash
+cp .env.example .env
+```
+
+Available variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `POSTGRES_USER` | `postgres` | PostgreSQL username |
+| `POSTGRES_PASSWORD` | `postgres` | PostgreSQL password |
+| `POSTGRES_DB` | `explorer` | PostgreSQL database name |
+| `POSTGRES_PORT` | `5432` | PostgreSQL host port |
+| `EXPLORER_PORT` | `8080` | Explorer REST API host port |
+| `UI_PORT` | `3000` | UI host port |
+| `NEXT_PUBLIC_BACKEND_DISPLAY_URL` | `http://localhost:8080` | Backend URL displayed in browser |
+
+### Data Persistence
+
+PostgreSQL data is persisted in a Docker volume named `postgres_data`. This ensures your blockchain data survives container restarts and removals.
+
+```bash
+# List volumes
+docker volume ls
+
+# Inspect the postgres volume
+docker volume inspect fabric-x-block-explorer_postgres_data
+
+# Backup the volume
+docker run --rm -v fabric-x-block-explorer_postgres_data:/data -v $(pwd):/backup alpine tar czf /backup/postgres-backup.tar.gz -C /data .
+
+# Restore from backup
+docker run --rm -v fabric-x-block-explorer_postgres_data:/data -v $(pwd):/backup alpine tar xzf /backup/postgres-backup.tar.gz -C /data
+```
+
+### Resource Limits
+
+The stack includes resource limits to prevent runaway containers:
+
+| Service | CPU Limit | Memory Limit | CPU Reservation | Memory Reservation |
+|---|---|---|---|---|
+| postgres | 1 core | 512 MB | 0.5 core | 256 MB |
+| explorer | 2 cores | 1 GB | 0.5 core | 512 MB |
+| ui | 1 core | 512 MB | 0.25 core | 256 MB |
+
+Adjust these in `docker-compose.yaml` under `deploy.resources` if needed.
 
 ---
 

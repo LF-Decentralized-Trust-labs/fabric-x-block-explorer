@@ -4,37 +4,57 @@
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: fabric-explorer-postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: explorer
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-explorer}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 
   explorer:
     build: .
+    container_name: fabric-explorer-backend
     depends_on:
       postgres:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "${EXPLORER_PORT:-8080}:8080"
     # Allows the explorer to reach a sidecar running on the host machine.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     command: ["start", "--config", "config.docker.yaml"]
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 
   ui:
     build:
@@ -42,13 +62,14 @@ services:
       dockerfile: Dockerfile
       args:
         - BACKEND_URL=http://explorer:8080
+    container_name: fabric-explorer-ui
     depends_on:
       explorer:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - "${UI_PORT:-3000}:3000"
     environment:
-      - NEXT_PUBLIC_BACKEND_DISPLAY_URL=http://localhost:8080
+      - NEXT_PUBLIC_BACKEND_DISPLAY_URL=${NEXT_PUBLIC_BACKEND_DISPLAY_URL:-http://localhost:8080}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
@@ -56,6 +77,14 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
 
 volumes:
   postgres_data:
