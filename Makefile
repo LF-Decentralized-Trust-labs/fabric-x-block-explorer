@@ -61,7 +61,7 @@ test-no-db: ## Run tests that do not require a database (parser, types, util, co
 start-db: ## Start a local PostgreSQL container for DB tests
 	@go mod download $(COMMITTER_MODULE)
 	@docker ps -aq -f name=$(DB_CONTAINER_NAME) | xargs -r docker rm -f
-	@bash $(COMMITTER_SCRIPTS)/get-and-start-postgres.sh
+	@cd $(COMMITTER_SRC) && bash scripts/get-and-start-postgres.sh
 	@echo "Waiting for Postgres to be ready..."
 	@until docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q; do sleep 1; done
 	@echo "✅ Postgres is ready on localhost:$(DB_PORT)"
