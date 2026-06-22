@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node docker-build docker-smoke ui-install ui-dev ui-build ui-lint dev help
+.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node docker-build docker-smoke docker-build-allinone docker-smoke-allinone ui-install ui-dev ui-build ui-lint dev help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -24,6 +24,8 @@ LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
 # EXPLORER_IMAGE_REPO is the registry path CI publishes to (see .github/workflows/release.yaml).
 EXPLORER_IMAGE_REPO ?= ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer
 EXPLORER_IMAGE      ?= fabric-x-block-explorer:$(VERSION)
+EXPLORER_ALLINONE_IMAGE_REPO ?= ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-allinone
+EXPLORER_ALLINONE_IMAGE      ?= fabric-x-block-explorer-allinone:$(VERSION)
 
 build: ## Build the explorer binary with version injection
 	@mkdir -p bin
@@ -41,6 +43,35 @@ docker-smoke: docker-build ## Build the image, then verify the container entrypo
 	echo "$$out" | grep -q "Block Explorer version" \
 		|| { echo "❌ unexpected version output from image"; exit 1; }
 	@echo "✅ Image smoke test passed"
+
+docker-build-allinone: ## Build the all-in-one image (postgres + backend + ui)
+	docker build -f Dockerfile.allinone --build-arg VERSION=$(VERSION) -t $(EXPLORER_ALLINONE_IMAGE) .
+	@echo "✅ Built image $(EXPLORER_ALLINONE_IMAGE)"
+
+docker-smoke-allinone: docker-build-allinone ## Build all-in-one image and verify all 3 ports are reachable
+	@echo "Running all-in-one container smoke test..."
+	@docker rm -f fx-allinone-smoke >/dev/null 2>&1 || true
+	@docker run -d --name fx-allinone-smoke \
+		-p 18080:8080 -p 13000:3000 -p 15432:5432 \
+		--add-host=host.docker.internal:host-gateway \
+		-e SIDECAR_HOST=host.docker.internal \
+		-e SIDECAR_PORT=4001 \
+		$(EXPLORER_ALLINONE_IMAGE) >/dev/null
+	@attempt=0; \
+	until curl -fsS http://127.0.0.1:18080/healthz >/dev/null 2>&1 && \
+	      curl -fsS http://127.0.0.1:13000/api/health >/dev/null 2>&1 && \
+	      docker exec fx-allinone-smoke pg_isready -h 127.0.0.1 -U postgres -q >/dev/null 2>&1; do \
+		attempt=$$((attempt + 1)); \
+		if [ $$attempt -ge 120 ]; then \
+			echo "❌ all-in-one image did not become ready in time"; \
+			docker logs --tail=80 fx-allinone-smoke || true; \
+			docker rm -f fx-allinone-smoke >/dev/null 2>&1 || true; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done
+	@docker rm -f fx-allinone-smoke >/dev/null 2>&1 || true
+	@echo "✅ All-in-one image smoke test passed"
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."

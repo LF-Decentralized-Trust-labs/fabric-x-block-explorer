@@ -1,0 +1,60 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# ── Build explorer backend ───────────────────────────────────────────────────
+FROM golang:1.26-alpine AS explorer-builder
+ARG VERSION=dev
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath \
+    -ldflags "-X github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli.Version=${VERSION}" \
+    -o /explorer ./cmd/explorer
+
+# ── Build Next.js UI ─────────────────────────────────────────────────────────
+FROM node:18-alpine AS ui-builder
+WORKDIR /ui
+COPY ui/package*.json ./
+RUN npm ci
+COPY ui/ ./
+# In this all-in-one image, UI and backend run in the same container.
+ARG BACKEND_URL=http://127.0.0.1:8080
+ENV BACKEND_URL=$BACKEND_URL
+RUN npm run build && npm prune --omit=dev
+
+# ── Runtime image: postgres + explorer + ui ──────────────────────────────────
+FROM postgres:16-alpine
+
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="Fabric-X Block Explorer All-in-One" \
+      org.opencontainers.image.description="All-in-one image: PostgreSQL + explorer backend + Next.js UI. Sidecar is external." \
+      org.opencontainers.image.source="https://github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="${VERSION}"
+
+RUN apk add --no-cache nodejs npm bash curl
+
+# Explorer backend
+COPY --from=explorer-builder /explorer /usr/local/bin/explorer
+
+# UI runtime files
+WORKDIR /app/ui
+COPY --from=ui-builder /ui/package*.json ./
+COPY --from=ui-builder /ui/next.config.js ./
+COPY --from=ui-builder /ui/.next ./.next
+COPY --from=ui-builder /ui/node_modules ./node_modules
+
+# Entrypoint starts postgres + explorer + ui in one container
+COPY scripts/entrypoint-allinone.sh /usr/local/bin/entrypoint-allinone.sh
+
+EXPOSE 5432 8080 3000
+
+# Readiness for the full image: DB + backend + UI must all be reachable.
+HEALTHCHECK --interval=20s --timeout=5s --start-period=30s --retries=6 \
+  CMD pg_isready -h 127.0.0.1 -p 5432 -U "${POSTGRES_USER:-postgres}" >/dev/null 2>&1 \
+    && wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz \
+    && wget --quiet --tries=1 --spider http://127.0.0.1:3000/api/health \
+    || exit 1
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-allinone.sh"]

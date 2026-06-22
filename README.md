@@ -86,10 +86,14 @@ The sidecar endpoint is set in `config.docker.yaml`. By default it points to `ho
 
 ## Container Image
 
-The explorer is published as a multi-arch (amd64 + arm64) image to the GitHub Container Registry on every push to `main` and every `vX.Y.Z` tag (see [.github/workflows/release.yaml](.github/workflows/release.yaml)).
+Two images are published as multi-arch (amd64 + arm64) to GHCR on pushes to `main` and release tags `vX.Y.Z` (see [.github/workflows/release.yaml](.github/workflows/release.yaml)).
 
 ```text
+# Backend-only image
 ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer
+
+# All-in-one image (PostgreSQL + backend + UI)
+ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-allinone
 ```
 
 | Tag | Meaning |
@@ -99,23 +103,66 @@ ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer
 | `X.Y` | Latest patch of a minor release |
 | `sha-<short>` | A specific commit |
 
-```bash
-# Pull the latest image
-docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+### Which image should I use?
 
-# Run it (expects PostgreSQL + a Fabric-X sidecar reachable from the container).
-# The image bundles config.docker.yaml and starts with it by default.
-docker run --rm -p 8080:8080 \
-  ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+- `fabric-x-block-explorer`: backend-only (you provide PostgreSQL + sidecar + UI)
+- `fabric-x-block-explorer-allinone`: **includes PostgreSQL + explorer backend + Next.js UI**
+
+Both images still expect the **Fabric-X sidecar to be external**.
+
+### One-command user experience (everything except sidecar)
+
+If you want a single image where users just run one command and everything works (except sidecar), use:
+
+```bash
+docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-allinone:latest
+
+docker run --rm \
+  -p 3000:3000 \
+  -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -e SIDECAR_HOST=host.docker.internal \
+  -e SIDECAR_PORT=4001 \
+  ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-allinone:latest
 ```
 
-The image ships a container `HEALTHCHECK` that probes `GET /healthz`, so orchestrators (Docker Compose, Kubernetes) can wait for it to become healthy before routing traffic.
+Access:
 
-Build and smoke-test it locally:
+- UI: `http://localhost:3000`
+- Backend API: `http://localhost:8080`
+- Backend health: `http://localhost:8080/healthz`
+
+### Use sidecar on any host/port
+
+Set these environment variables on the all-in-one image:
+
+- `SIDECAR_HOST` (default `host.docker.internal`)
+- `SIDECAR_PORT` (default `4001`)
+- `SIDECAR_TLS_MODE` (default `none`)
+
+Example:
 
 ```bash
-make docker-build     # builds fabric-x-block-explorer:<version>
-make docker-smoke     # builds, then runs the container and checks `explorer version`
+docker run --rm \
+  -p 3000:3000 \
+  -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -e SIDECAR_HOST=10.10.10.25 \
+  -e SIDECAR_PORT=5001 \
+  -e SIDECAR_TLS_MODE=none \
+  ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-allinone:latest
+```
+
+### Build and smoke-test locally
+
+```bash
+# Backend-only image
+make docker-build
+make docker-smoke
+
+# All-in-one image
+make docker-build-allinone
+make docker-smoke-allinone
 ```
 
 ---
@@ -272,7 +319,7 @@ Keys and values in Fabric read-write sets are raw bytes hex-encoded by the backe
 
 ## Make Targets
 
-```
+```text
 make help              # Print all targets
 
 # ── One-command E2E ──────────────────────────────────────────────
@@ -283,6 +330,8 @@ make dev-down          # 🛑 Tear down everything started by make dev
 make build             # Build ./bin/explorer
 make docker-build      # Build the explorer Docker image
 make docker-smoke      # Build the image + run a container smoke test
+make docker-build-allinone  # Build all-in-one image (postgres + backend + ui)
+make docker-smoke-allinone  # Build all-in-one image + run readiness smoke test
 
 # ── Testing ──────────────────────────────────────────────────────
 make test-no-db        # Tests that don't need a database
@@ -322,7 +371,7 @@ make lint              # Run golangci-lint
 
 ## Project Structure
 
-```
+```text
 .
 ├── cmd/
 │   └── explorer/           # Binary entry point (cobra CLI: start, version)
