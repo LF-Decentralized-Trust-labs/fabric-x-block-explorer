@@ -14,7 +14,7 @@ SELECT
     block_num, tx_num, tx_id, validation_code, tx_type, chaincode_name,
     creator_msp_id, creator_id_bytes, creator_nonce, envelope_signature,
     payload_extension, channel_version, channel_id, epoch, tls_cert_hash,
-    created_at
+    created_at, metadata
 FROM transactions
 WHERE block_num = $1
 ORDER BY tx_num
@@ -53,6 +53,7 @@ func (q *Queries) GetValidationCodeByBlock(ctx context.Context, arg GetValidatio
 			&i.Epoch,
 			&i.TlsCertHash,
 			&i.CreatedAt,
+			&i.Metadata,
 		); err != nil {
 			return nil, err
 		}
@@ -69,7 +70,7 @@ SELECT
     block_num, tx_num, tx_id, validation_code, tx_type, chaincode_name,
     creator_msp_id, creator_id_bytes, creator_nonce, envelope_signature,
     payload_extension, channel_version, channel_id, epoch, tls_cert_hash,
-    created_at
+    created_at, metadata
 FROM transactions
 WHERE tx_id = $1
 `
@@ -94,6 +95,7 @@ func (q *Queries) GetValidationCodeByTxID(ctx context.Context, txID []byte) (Tra
 		&i.Epoch,
 		&i.TlsCertHash,
 		&i.CreatedAt,
+		&i.Metadata,
 	)
 	return i, err
 }

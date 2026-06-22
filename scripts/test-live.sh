@@ -5,10 +5,14 @@
 # test-live.sh — Spin up committer-test-node + explorer Postgres, run the
 # explorer binary against them, then smoke-test every REST endpoint.
 #
+# The committer-test-node v1.0.3 uses a custom loadgen config (scripts/loadgen-config.yaml)
+# that generates transactions with metadata and all write types (read-only, read-write, blind-write).
+#
 # Usage:
-#   ./scripts/test-live.sh            # run everything
-#   ./scripts/test-live.sh --no-build # skip 'go build'
-#   ./scripts/test-live.sh --down     # just tear down containers and exit
+#   ./scripts/test-live.sh                # run everything
+#   ./scripts/test-live.sh --no-build     # skip 'go build'
+#   ./scripts/test-live.sh --keep         # keep containers running after tests
+#   ./scripts/test-live.sh --down         # just tear down containers and exit
 
 set -uo pipefail
 
@@ -21,7 +25,7 @@ EXPLORER_PID_FILE="/tmp/fx-explorer-live.pid"
 EXPLORER_LOG="/tmp/fx-explorer-live.log"
 CFG_FILE="/tmp/fx-explorer-live.yaml"
 
-COMMITTER_IMAGE="hyperledger/fabric-x-committer-test-node:1.0.0-alpha.2"
+COMMITTER_IMAGE="hyperledger/fabric-x-committer-test-node:1.0.3"
 POSTGRES_IMAGE="postgres:16-alpine"
 
 PG_HOST_PORT=15432
@@ -102,9 +106,9 @@ BUILD=true
 KEEP=false
 for arg in "$@"; do
   case $arg in
-    --no-build) BUILD=false ;;
-    --down)     teardown; exit 0 ;;
-    --keep)     KEEP=true ;;
+    --no-build)     BUILD=false ;;
+    --down)         teardown; exit 0 ;;
+    --keep)         KEEP=true ;;
   esac
 done
 
@@ -151,8 +155,14 @@ docker run -d --name "$POSTGRES_CONTAINER" \
   "$POSTGRES_IMAGE" >/dev/null
 wait_tcp 127.0.0.1 "$PG_HOST_PORT" 60 || die "Postgres not ready"
 
-# 4. Start committer-test-node
+# 4. Start committer-test-node with custom loadgen config
 log "Starting committer-test-node ($COMMITTER_IMAGE)..."
+# Copy custom loadgen config into container
+CUSTOM_CONFIG="$(cd "$(dirname "$0")" && pwd)/loadgen-config.yaml"
+if [[ ! -f "$CUSTOM_CONFIG" ]]; then
+  die "Custom loadgen config not found: $CUSTOM_CONFIG"
+fi
+
 docker run -d --name "$COMMITTER_CONTAINER" \
   -e SC_COORDINATOR_SERVER_TLS_MODE=none \
   -e SC_COORDINATOR_VERIFIER_TLS_MODE=none \
@@ -174,16 +184,12 @@ docker run -d --name "$COMMITTER_CONTAINER" \
   -e SC_LOADGEN_MONITORING_TLS_MODE=none \
   -e SC_LOADGEN_ORDERER_CLIENT_SIDECAR_CLIENT_TLS_MODE=none \
   -e SC_LOADGEN_ORDERER_CLIENT_ORDERER_TLS_MODE=none \
-  -e SC_LOADGEN_TRANSACTION_READ_ONLY_COUNT_UNIFORM_MIN=0 \
-  -e SC_LOADGEN_TRANSACTION_READ_ONLY_COUNT_UNIFORM_MAX=4 \
-  -e SC_LOADGEN_TRANSACTION_READ_WRITE_COUNT_UNIFORM_MIN=0 \
-  -e SC_LOADGEN_TRANSACTION_READ_WRITE_COUNT_UNIFORM_MAX=4 \
-  -e SC_LOADGEN_TRANSACTION_READ_WRITE_COUNT_CONST=0 \
-  -e SC_LOADGEN_TRANSACTION_WRITE_COUNT_UNIFORM_MIN=0 \
-  -e SC_LOADGEN_TRANSACTION_WRITE_COUNT_UNIFORM_MAX=4 \
+  -v "$CUSTOM_CONFIG:/root/config/loadgen.yaml:ro" \
   -p "127.0.0.1::${SIDECAR_CONTAINER_PORT}/tcp" \
   "$COMMITTER_IMAGE" \
   run db committer orderer loadgen >/dev/null
+
+log "Custom loadgen config mounted from: $CUSTOM_CONFIG"
 
 # 5. Discover sidecar host port
 log "Discovering sidecar host port..."
@@ -241,6 +247,17 @@ wait_http "${EXPLORER_URL}/blocks/height" 120 || die "Explorer REST not ready"
 
 # 8. Wait for at least 1 application block (height > 0)
 HEIGHT=$(wait_height_gt0 300) || die "No application blocks arrived"
+
+# Note: In v1.0.3, loadgen configuration is done via the config file (loadgen-config.yaml)
+# which is mounted into the container. The loadgen will generate transactions with:
+# - 256 bytes of metadata per transaction
+# - 2-5 read-only operations per transaction
+# - 2-5 read-write operations per transaction
+# - 1-3 blind-write operations per transaction
+# The loadgen will generate up to 50,000 transactions as configured in the limit section.
+log "Loadgen is configured to generate transactions with metadata and all write types"
+log "Waiting for transactions to be generated and ingested..."
+sleep 5
 
 # ── API smoke tests ────────────────────────────────────────────────────────────
 echo ""

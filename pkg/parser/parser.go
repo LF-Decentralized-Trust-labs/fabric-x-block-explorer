@@ -46,6 +46,7 @@ type txMeta struct {
 	epoch             *uint64
 	tlsCertHash       []byte
 	createdAt         *int64
+	metadata          []byte
 }
 
 // nsData wraps a TxNamespace with its associated endorsement records.
@@ -271,7 +272,7 @@ func extractCreatorInfo(meta *txMeta, pl *common.Payload) {
 	}
 }
 
-// extractChaincodeData extracts the chaincode name from the first namespace of the transaction.
+// extractChaincodeData extracts the chaincode name and metadata from the transaction.
 func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	tx, err := serialization.UnmarshalTx(pl.Data)
 	if err != nil {
@@ -279,6 +280,30 @@ func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	}
 	if len(tx.Namespaces) > 0 && tx.Namespaces[0] != nil && tx.Namespaces[0].NsId != "" {
 		meta.chaincodeName = &tx.Namespaces[0].NsId
+	}
+	// Extract transaction metadata (introduced in committer v1.0.3)
+	if len(tx.Metadata) > 0 {
+		// Serialize the metadata array as a single byte slice
+		// Each metadata entry is length-prefixed for proper deserialization
+		var totalLen int
+		for _, m := range tx.Metadata {
+			totalLen += 4 + len(m) // 4 bytes for length prefix + data
+		}
+		if totalLen > 0 {
+			buf := make([]byte, 0, totalLen)
+			for _, m := range tx.Metadata {
+				// Store length as 4-byte big-endian
+				lenBytes := []byte{
+					byte(len(m) >> 24),
+					byte(len(m) >> 16),
+					byte(len(m) >> 8),
+					byte(len(m)),
+				}
+				buf = append(buf, lenBytes...)
+				buf = append(buf, m...)
+			}
+			meta.metadata = buf
+		}
 	}
 }
 
@@ -323,6 +348,7 @@ func buildMinimalTxRecord(meta txMeta) types.TxRecord {
 		Epoch:             meta.epoch,
 		TLSCertHash:       meta.tlsCertHash,
 		CreatedAt:         meta.createdAt,
+		Metadata:          meta.metadata,
 	}
 }
 
@@ -343,6 +369,7 @@ func buildTxRecord(meta txMeta, nsList []nsData) types.TxRecord {
 		Epoch:             meta.epoch,
 		TLSCertHash:       meta.tlsCertHash,
 		CreatedAt:         meta.createdAt,
+		Metadata:          meta.metadata,
 		Namespaces:        make([]types.TxNamespaceRecord, 0, len(nsList)),
 	}
 

@@ -416,6 +416,7 @@ func (s *Service) loadTransaction(ctx context.Context, tx dbsqlc.Transaction) (T
 		Epoch:             util.NullableInt64ToPtr(tx.Epoch),
 		TLSCertHash:       tx.TlsCertHash,
 		CreatedAt:         util.NullableTimestampToTimePtr(tx.CreatedAt),
+		Metadata:          tx.Metadata,
 	}
 
 	namespaces, err := s.fetchNamespaces(ctx, tx.BlockNum, tx.TxNum)
@@ -480,6 +481,7 @@ func (s *Service) loadBlockTransactions(ctx context.Context, txRows []dbsqlc.Tra
 			Epoch:             util.NullableInt64ToPtr(tx.Epoch),
 			TLSCertHash:       tx.TlsCertHash,
 			CreatedAt:         util.NullableTimestampToTimePtr(tx.CreatedAt),
+			Metadata:          tx.Metadata,
 			Namespaces:        datasets.namespaces[tx.TxNum],
 			BlindWrites:       datasets.blindWrites[tx.TxNum],
 			Endorsements:      datasets.endorsements[tx.TxNum],
