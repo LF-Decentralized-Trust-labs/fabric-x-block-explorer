@@ -293,11 +293,12 @@ func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 			buf := make([]byte, 0, totalLen)
 			for _, m := range tx.Metadata {
 				// Store length as 4-byte big-endian
+				mLen := uint32(len(m))
 				lenBytes := []byte{
-					byte(len(m) >> 24),
-					byte(len(m) >> 16),
-					byte(len(m) >> 8),
-					byte(len(m)),
+					byte(mLen >> 24),
+					byte(mLen >> 16),
+					byte(mLen >> 8),
+					byte(mLen),
 				}
 				buf = append(buf, lenBytes...)
 				buf = append(buf, m...)
