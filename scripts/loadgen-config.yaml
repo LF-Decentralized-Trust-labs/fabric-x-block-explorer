@@ -1,0 +1,109 @@
+# Custom loadgen configuration for testing metadata and all write types
+# Based on the default config from fabric-x-committer-test-node:1.0.3
+
+server:
+  endpoint: :8001
+  tls: &tlsConfig
+    mode: mtls
+    cert-path: /root/artifacts/peerOrganizations/peer-org-0.com/peers/loadgen/tls/server.crt
+    key-path: /root/artifacts/peerOrganizations/peer-org-0.com/peers/loadgen/tls/server.key
+    ca-cert-paths:
+      - /root/artifacts/peerOrganizations/peer-org-0.com/msp/tlscacerts/tlspeer-org-0-CA-cert.pem
+
+monitoring:
+  endpoint: :2118
+  tls: *tlsConfig
+  rate-limit:
+    requests-per-second: 0
+    burst: 0
+  latency:
+    max-tracked-txs: 10_000
+    sampler:
+      portion: 0.01
+    buckets:
+      distribution: uniform
+      max-latency: 5s
+      bucket-count: 1000
+
+orderer-client:
+  sidecar-client:
+    endpoint: sidecar:4001
+    tls: *tlsConfig
+  orderer:
+    fault-tolerance-level: BFT
+    latest-known-config-block-path: /root/artifacts/config-block.pb.bin
+    tls: *tlsConfig
+    identity:
+      msp-id: peer-org-0
+      msp-dir: /root/artifacts/peerOrganizations/peer-org-0.com/users/client@peer-org-0.com/msp
+      bccsp:
+        Default: SW
+        SW:
+          Security: 256
+          Hash: SHA2
+  broadcast-parallelism: 1
+
+load-profile:
+  key:
+    size: 32
+  block:
+    max-size: 500
+    min-size: 10
+    preferred-rate: 1s
+  transaction:
+    # ENABLED: Generate 256 bytes of metadata per transaction
+    metadata-size: 256
+    # ENABLED: Generate 128 bytes for read-write values
+    read-write-value-size: 128
+    # ENABLED: Generate 128 bytes for blind-write values
+    blind-write-value-size: 128
+    # ENABLED: Generate read-only operations (2-5 per transaction)
+    read-only-count:
+      uniform:
+        min: 2
+        max: 5
+    # ENABLED: Generate read-write operations (2-5 per transaction)
+    read-write-count:
+      uniform:
+        min: 2
+        max: 5
+    # ENABLED: Generate blind-write operations (1-3 per transaction)
+    write-count:
+      uniform:
+        min: 1
+        max: 3
+  policy:
+    channel-id: mychannel
+    namespace-policies:
+      0:
+        scheme: MSP
+    orderer-endpoints:
+      - id=0,broadcast,deliver,orderer:7050
+    peer-organization-count: 2
+    artifacts-path: /root/artifacts
+  conflicts:
+    invalid-signatures: 0.1
+  seed: 12345
+  workers: 1
+
+stream:
+  rate-limit: 10_000
+  buffers-size: 10
+  gen-batch: 10
+
+generate:
+  config: false
+  namespaces: true
+  load: true
+
+limit:
+  blocks: 0
+  transactions: 50_000
+
+logging:
+  logSpec: info:grpc=error
+  format: >-
+    %{color}%{time:2006-01-02 15:04:05.000 MST} [%{module}] %{shortfunc}
+    -> %{level:.4s}%{color:reset} %{message}
+
+# Made with Bob

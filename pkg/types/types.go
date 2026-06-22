@@ -71,6 +71,7 @@ type (
 		Epoch             *uint64
 		TLSCertHash       []byte
 		CreatedAt         *int64 // Unix timestamp in nanoseconds
+		Metadata          []byte // Transaction execution metadata (Tx.Metadata field, introduced in committer v1.0.3)
 		Namespaces        []TxNamespaceRecord
 	}
 

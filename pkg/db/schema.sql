@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     epoch                   BIGINT,
     tls_cert_hash           BYTEA,
     created_at              TIMESTAMP,
+    metadata                BYTEA,
     PRIMARY KEY (block_num, tx_num)
 );
 

@@ -1,0 +1,49 @@
+# Loadgen configuration for testing metadata feature (v1.0.3+)
+# This configuration generates transactions with various metadata sizes
+
+workload:
+  # Transaction metadata configuration
+  metadata-size: 256  # Generate 256 bytes of metadata per transaction
+  
+  # Value sizes for read-write operations
+  value-size: 512
+  
+  # Transaction mix
+  read-write-ratio: 0.7  # 70% read-write, 30% blind writes
+  
+  # Number of transactions to generate
+  transactions: 50
+  
+  # Namespace configuration
+  namespaces:
+    - name: "testdata"
+      keys: 100
+    - name: "metadata-test"
+      keys: 50
+  
+  # Rate limiting
+  rate-limit: 10  # 10 transactions per second
+  
+  # Batch configuration
+  batch-size: 5
+  batch-timeout: 1s
+
+# Committer connection settings
+committer:
+  endpoints:
+    - host: localhost
+      port: 7050
+  
+  # TLS configuration (adjust based on your setup)
+  tls:
+    enabled: false
+    # cert-file: /path/to/cert.pem
+    # key-file: /path/to/key.pem
+    # ca-file: /path/to/ca.pem
+
+# Logging
+logging:
+  level: info
+  format: text
+
+# Made with Bob
