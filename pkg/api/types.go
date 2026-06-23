@@ -163,7 +163,8 @@ type Transaction struct {
 	// TLSCertHash is the TLS certificate hash from the channel header (hex).
 	TLSCertHash HexBytes   `json:"tls_cert_hash"`
 	CreatedAt   *time.Time `json:"created_at"`
-	// Metadata contains transaction execution metadata (array of hex-encoded byte arrays, introduced in committer v1.0.3).
+	// Metadata contains transaction execution metadata (array of hex-encoded byte arrays,
+	// introduced in committer v1.0.3).
 	// This field contains additional execution information that does not affect the world state.
 	Metadata     HexBytesArray    `json:"metadata,omitempty"`
 	Namespaces   []NamespaceRow   `json:"namespaces"`
