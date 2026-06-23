@@ -40,10 +40,28 @@ interface RestEndorsement {
   seq_num: number;
   msp_id: string;
   endorsement: string;
+  // The endorser identity is passed through from the ledger; depending on the
+  // source it carries either a base64 `certificate` or a `certificate_id`.
   identity: {
     mspid: string;
-    certificate_id: string;
+    certificate?: string;
+    certificate_id?: string;
   } | null;
+}
+
+interface RestCreatorIdentity {
+  msp_id: string;
+  certificate_pem: string;
+}
+
+interface RestChaincodeID {
+  name: string;
+  path: string;
+  version: string;
+}
+
+interface RestPayloadExtension {
+  chaincode_id: RestChaincodeID | null;
 }
 
 interface RestNamespace {
@@ -59,10 +77,10 @@ interface RestTransaction {
   tx_type: string | null;
   chaincode_name: string | null;
   creator_msp_id: string | null;
-  creator_identity: string | null;
+  creator_identity: RestCreatorIdentity | null;
   creator_nonce: string | null;
   envelope_signature: string | null;
-  payload_extension: string | null;
+  payload_extension: RestPayloadExtension | null;
   channel_version: number | null;
   channel_id: string;
   epoch: number | null;
@@ -162,7 +180,22 @@ export interface EndorsementRecord {
   seq_num: number;
   msp_id: string;
   endorsement: string;
-  certificate_id: string;
+  certificate: string;
+}
+
+export interface CreatorIdentity {
+  msp_id: string;
+  certificate_pem: string;
+}
+
+export interface ChaincodeID {
+  name: string;
+  path: string;
+  version: string;
+}
+
+export interface PayloadExtension {
+  chaincode_id: ChaincodeID | null;
 }
 
 export interface Transaction {
@@ -173,10 +206,10 @@ export interface Transaction {
   tx_type: string | null;
   chaincode_name: string | null;
   creator_msp_id: string | null;
-  creator_identity: string | null;
+  creator_identity: CreatorIdentity | null;
   creator_nonce: string | null;
   envelope_signature: string | null;
-  payload_extension: string | null;
+  payload_extension: PayloadExtension | null;
   channel_version: number | null;
   channel_id: string;
   epoch: number | null;
@@ -236,10 +269,23 @@ const transformTransaction = (tx: RestTransaction): Transaction => ({
   tx_type: tx.tx_type ?? null,
   chaincode_name: tx.chaincode_name ?? null,
   creator_msp_id: tx.creator_msp_id ?? null,
-  creator_identity: tx.creator_identity ?? null,
+  creator_identity: tx.creator_identity
+    ? {
+        msp_id: tx.creator_identity.msp_id ?? '',
+        certificate_pem: tx.creator_identity.certificate_pem ?? '',
+      }
+    : null,
   creator_nonce: tx.creator_nonce ?? null,
   envelope_signature: tx.envelope_signature ?? null,
-  payload_extension: tx.payload_extension ?? null,
+  payload_extension: tx.payload_extension?.chaincode_id
+    ? {
+        chaincode_id: {
+          name: tx.payload_extension.chaincode_id.name ?? '',
+          path: tx.payload_extension.chaincode_id.path ?? '',
+          version: tx.payload_extension.chaincode_id.version ?? '',
+        },
+      }
+    : null,
   channel_version: tx.channel_version ?? null,
   channel_id: tx.channel_id ?? '',
   epoch: tx.epoch ?? null,
@@ -265,7 +311,7 @@ const transformTransaction = (tx: RestTransaction): Transaction => ({
     seq_num: e.seq_num,
     msp_id: e.msp_id,
     endorsement: e.endorsement,
-    certificate_id: e.identity?.certificate_id ?? '',
+    certificate: e.identity?.certificate ?? e.identity?.certificate_id ?? '',
   })),
 });
 
