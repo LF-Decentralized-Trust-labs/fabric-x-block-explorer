@@ -86,7 +86,7 @@ interface RestTransaction {
   epoch: number | null;
   tls_cert_hash: string | null;
   created_at: string;
-  metadata?: string | null;
+  metadata?: string[] | null;
   namespaces: RestNamespace[];
   read_writes?: RestReadWrite[];
   blind_writes?: RestBlindWrite[];
@@ -216,7 +216,7 @@ export interface Transaction {
   epoch: number | null;
   tls_cert_hash: string | null;
   created_at: string;
-  metadata: string | null;
+  metadata: string[] | null;
   namespaces: NamespaceRecord[];
   blind_writes: BlindWriteRecord[];
   endorsements: EndorsementRecord[];

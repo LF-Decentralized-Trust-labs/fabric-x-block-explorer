@@ -313,7 +313,17 @@ export default function TransactionDetailPage() {
                 <span className="ml-2 text-xs text-[#858585] font-normal">(v1.0.3+)</span>
               </dt>
               <dd className="sm:col-span-2">
-                <HexDataDisplay data={transaction.metadata || '—'} />
+                {transaction.metadata && transaction.metadata.length > 0 ? (
+                  <div className="space-y-2">
+                    {transaction.metadata.map((item, index) => (
+                      <div key={index}>
+                        <HexDataDisplay data={item} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[#858585]">—</span>
+                )}
               </dd>
             </div>
           </dl>

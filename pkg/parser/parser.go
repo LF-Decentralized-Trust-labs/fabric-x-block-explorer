@@ -46,7 +46,7 @@ type txMeta struct {
 	epoch             *uint64
 	tlsCertHash       []byte
 	createdAt         *int64
-	metadata          []byte
+	metadata          [][]byte
 }
 
 // nsData wraps a TxNamespace with its associated endorsement records.
@@ -283,33 +283,7 @@ func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	}
 	// Extract transaction metadata (introduced in committer v1.0.3)
 	if len(tx.Metadata) > 0 {
-		// Serialize the metadata array as a single byte slice
-		// Each metadata entry is length-prefixed for proper deserialization
-		var totalLen int
-		for _, m := range tx.Metadata {
-			totalLen += 4 + len(m) // 4 bytes for length prefix + data
-		}
-		if totalLen > 0 {
-			buf := make([]byte, 0, totalLen)
-			for _, m := range tx.Metadata {
-				// Store length as 4-byte big-endian
-				// Safe conversion: check bounds before converting
-				if len(m) > 0xFFFFFFFF {
-					// Skip metadata that's too large (> 4GB)
-					continue
-				}
-				mLen := uint32(len(m)) // #nosec G115 -- bounds checked above
-				lenBytes := []byte{
-					byte(mLen >> 24), // #nosec G115 -- safe conversion from uint32 to byte
-					byte(mLen >> 16), // #nosec G115 -- safe conversion from uint32 to byte
-					byte(mLen >> 8),  // #nosec G115 -- safe conversion from uint32 to byte
-					byte(mLen),       // #nosec G115 -- safe conversion from uint32 to byte
-				}
-				buf = append(buf, lenBytes...)
-				buf = append(buf, m...)
-			}
-			meta.metadata = buf
-		}
+		meta.metadata = tx.Metadata
 	}
 }
 

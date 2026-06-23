@@ -287,7 +287,7 @@ type InsertTransactionParams struct {
 	Epoch             pgtype.Int8      `json:"epoch"`
 	TlsCertHash       []byte           `json:"tls_cert_hash"`
 	CreatedAt         pgtype.Timestamp `json:"created_at"`
-	Metadata          []byte           `json:"metadata"`
+	Metadata          [][]byte         `json:"metadata"`
 }
 
 func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults {

@@ -52,7 +52,7 @@ type Transaction struct {
 	Epoch             pgtype.Int8      `json:"epoch"`
 	TlsCertHash       []byte           `json:"tls_cert_hash"`
 	CreatedAt         pgtype.Timestamp `json:"created_at"`
-	Metadata          []byte           `json:"metadata"`
+	Metadata          [][]byte         `json:"metadata"`
 }
 
 type TxBlindWrite struct {
