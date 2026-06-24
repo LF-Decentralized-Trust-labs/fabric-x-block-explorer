@@ -1,12 +1,17 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-FROM golang:1.26-alpine AS builder
+# Build on the native build platform and cross-compile to the target,
+# so multi-arch builds (buildx) don't pay the cost of QEMU emulation.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -o /explorer ./cmd/explorer
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -o /explorer ./cmd/explorer
 
 FROM alpine:3.21
 WORKDIR /app

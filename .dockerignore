@@ -1,0 +1,41 @@
+# The root image builds only the Go backend (cmd/, pkg/, go.mod/sum,
+# config.docker.yaml). Everything else is excluded from the build context.
+
+# VCS / CI / editor
+.git
+.github
+.vscode
+.DS_Store
+
+# UI is built from its own ./ui context, not needed here (~470MB)
+ui
+
+# Docs and markdown
+docs
+*.md
+
+# Local-only config (may contain secrets) — never ship in the image
+config.local.yaml
+config.yaml
+.env
+.env.*
+
+# Build artifacts / binaries / coverage
+/explorer
+bin/
+dist/
+coverage/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Logs / temp
+*.log
+*.tmp
+nohup.out
+
+# Compose / docker (not part of the build)
+docker-compose*.yaml
+Dockerfile
+.dockerignore
