@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS transactions (
     epoch                   BIGINT,
     tls_cert_hash           BYTEA,
     created_at              TIMESTAMP,
+    -- Transaction execution metadata (Tx.Metadata field, introduced in committer v1.0.3).
+    -- Array of byte arrays containing additional execution information that does not affect world state.
+    metadata                BYTEA[],
     PRIMARY KEY (block_num, tx_num)
 );
 

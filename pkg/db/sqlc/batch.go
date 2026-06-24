@@ -258,9 +258,9 @@ INSERT INTO transactions (
     block_num, tx_num, tx_id, validation_code, tx_type, chaincode_name,
     creator_msp_id, creator_id_bytes, creator_nonce, envelope_signature,
     payload_extension, channel_version, channel_id, epoch, tls_cert_hash,
-    created_at
+    created_at, metadata
 )
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 ON CONFLICT (block_num, tx_num) DO NOTHING
 `
 
@@ -287,6 +287,7 @@ type InsertTransactionParams struct {
 	Epoch             pgtype.Int8      `json:"epoch"`
 	TlsCertHash       []byte           `json:"tls_cert_hash"`
 	CreatedAt         pgtype.Timestamp `json:"created_at"`
+	Metadata          [][]byte         `json:"metadata"`
 }
 
 func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransactionParams) *InsertTransactionBatchResults {
@@ -309,6 +310,7 @@ func (q *Queries) InsertTransaction(ctx context.Context, arg []InsertTransaction
 			a.Epoch,
 			a.TlsCertHash,
 			a.CreatedAt,
+			a.Metadata,
 		}
 		batch.Queue(insertTransaction, vals...)
 	}

@@ -25,6 +25,21 @@ func (h HexBytes) MarshalJSON() ([]byte, error) {
 	return json.Marshal(hex.EncodeToString(h))
 }
 
+// HexBytesArray is a slice of byte slices that JSON-marshals as an array of lowercase hex strings.
+type HexBytesArray [][]byte
+
+// MarshalJSON implements json.Marshaler.
+func (h HexBytesArray) MarshalJSON() ([]byte, error) {
+	if h == nil {
+		return []byte("null"), nil
+	}
+	hexStrings := make([]string, len(h))
+	for i, b := range h {
+		hexStrings[i] = hex.EncodeToString(b)
+	}
+	return json.Marshal(hexStrings)
+}
+
 // ErrorResponse is the JSON body returned on all error responses.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -146,8 +161,12 @@ type Transaction struct {
 	ChannelID        *string           `json:"channel_id"`
 	Epoch            *int64            `json:"epoch"`
 	// TLSCertHash is the TLS certificate hash from the channel header (hex).
-	TLSCertHash  HexBytes         `json:"tls_cert_hash"`
-	CreatedAt    *time.Time       `json:"created_at"`
+	TLSCertHash HexBytes   `json:"tls_cert_hash"`
+	CreatedAt   *time.Time `json:"created_at"`
+	// Metadata contains transaction execution metadata (array of hex-encoded byte arrays,
+	// introduced in committer v1.0.3).
+	// This field contains additional execution information that does not affect the world state.
+	Metadata     HexBytesArray    `json:"metadata,omitempty"`
 	Namespaces   []NamespaceRow   `json:"namespaces"`
 	BlindWrites  []BlindWriteRow  `json:"blind_writes"`
 	Endorsements []EndorsementRow `json:"endorsements"`

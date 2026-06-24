@@ -13,6 +13,7 @@ import Link from 'next/link';
 import { MetricCard } from '@/components/explorer/MetricCard';
 import { EmptyState } from '@/components/explorer/EmptyState';
 import { HexField } from '@/components/explorer/HexField';
+import { HexDataDisplay } from '@/components/explorer/HexDataDisplay';
 
 export default function TransactionDetailPage() {
   const params = useParams();
@@ -153,74 +154,78 @@ export default function TransactionDetailPage() {
               </dd>
             </div>
 
-            {transaction.chaincode_name && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Chaincode</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.chaincode_name}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Chaincode</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">
+                {transaction.chaincode_name || '—'}
+              </dd>
+            </div>
 
-            {transaction.channel_id && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Channel</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">{transaction.channel_id}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Channel</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">
+                {transaction.channel_id || '—'}
+              </dd>
+            </div>
 
-            {transaction.created_at && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Timestamp</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">
-                  {new Date(transaction.created_at).toLocaleString(undefined, {
-                    year: 'numeric', month: 'short', day: 'numeric',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit',
-                  })}
-                  <span className="ml-2 text-[#858585] text-xs font-mono">({transaction.created_at})</span>
-                </dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Timestamp</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8]">
+                {transaction.created_at ? (
+                  <>
+                    {new Date(transaction.created_at).toLocaleString(undefined, {
+                      year: 'numeric', month: 'short', day: 'numeric',
+                      hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    })}
+                    <span className="ml-2 text-[#858585] text-xs font-mono">({transaction.created_at})</span>
+                  </>
+                ) : '—'}
+              </dd>
+            </div>
 
-            {transaction.creator_msp_id && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Creator MSP</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.creator_msp_id}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Creator MSP</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">
+                {transaction.creator_msp_id || '—'}
+              </dd>
+            </div>
 
-            {transaction.tx_type && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Tx Type</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.tx_type}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Tx Type</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">
+                {transaction.tx_type || '—'}
+              </dd>
+            </div>
 
-            {transaction.channel_version !== null && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Channel Version</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.channel_version}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Channel Version</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">
+                {transaction.channel_version !== null ? transaction.channel_version : '—'}
+              </dd>
+            </div>
 
-            {transaction.epoch !== null && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Epoch</dt>
-                <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">{transaction.epoch}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Epoch</dt>
+              <dd className="sm:col-span-2 text-sm text-[#e8e8e8] font-mono">
+                {transaction.epoch !== null ? transaction.epoch : '—'}
+              </dd>
+            </div>
 
-            {transaction.namespaces.length > 0 && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Namespaces</dt>
-                <dd className="sm:col-span-2 flex flex-wrap gap-2">
-                  {transaction.namespaces.map((ns) => (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Namespaces</dt>
+              <dd className="sm:col-span-2 flex flex-wrap gap-2">
+                {transaction.namespaces.length > 0 ? (
+                  transaction.namespaces.map((ns) => (
                     <span key={ns.ns_id} className="inline-flex items-center gap-1 rounded border border-[#454545] bg-[#2d2d2d] px-2 py-0.5 text-xs font-mono">
                       <span className="text-[#9cdcfe]">{ns.ns_id}</span>
                       <span className="text-[#858585]">v{ns.ns_version}</span>
                     </span>
-                  ))}
-                </dd>
-              </div>
-            )}
+                  ))
+                ) : (
+                  <span className="text-sm text-[#858585]">—</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </CardContent>
       </Card>
@@ -231,12 +236,12 @@ export default function TransactionDetailPage() {
         </CardHeader>
         <CardContent>
           <dl className="space-y-4">
-            {transaction.creator_nonce && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Creator Nonce</dt>
-                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.creator_nonce}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Creator Nonce</dt>
+              <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
+                {transaction.creator_nonce || '—'}
+              </dd>
+            </div>
 
             {transaction.creator_identity && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -261,16 +266,16 @@ export default function TransactionDetailPage() {
               </div>
             )}
 
-            {transaction.envelope_signature && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">Envelope Signature</dt>
-                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
-                  {transaction.envelope_signature.length > 80
-                    ? `${transaction.envelope_signature.slice(0, 40)}…${transaction.envelope_signature.slice(-8)}`
-                    : transaction.envelope_signature}
-                </dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">Envelope Signature</dt>
+              <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
+                {transaction.envelope_signature
+                  ? (transaction.envelope_signature.length > 80
+                      ? `${transaction.envelope_signature.slice(0, 40)}…${transaction.envelope_signature.slice(-8)}`
+                      : transaction.envelope_signature)
+                  : '—'}
+              </dd>
+            </div>
 
             {transaction.payload_extension?.chaincode_id && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -295,12 +300,32 @@ export default function TransactionDetailPage() {
               </div>
             )}
 
-            {transaction.tls_cert_hash && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <dt className="text-sm font-medium text-[#858585]">TLS Cert Hash</dt>
-                <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">{transaction.tls_cert_hash}</dd>
-              </div>
-            )}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">TLS Cert Hash</dt>
+              <dd className="sm:col-span-2 font-mono text-xs text-[#ce9178] break-all">
+                {transaction.tls_cert_hash || '—'}
+              </dd>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <dt className="text-sm font-medium text-[#858585]">
+                Metadata
+                <span className="ml-2 text-xs text-[#858585] font-normal">(v1.0.3+)</span>
+              </dt>
+              <dd className="sm:col-span-2">
+                {transaction.metadata && transaction.metadata.length > 0 ? (
+                  <div className="space-y-2">
+                    {transaction.metadata.map((item, index) => (
+                      <div key={index}>
+                        <HexDataDisplay data={item} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-[#858585]">—</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </CardContent>
       </Card>

@@ -207,6 +207,7 @@ func (p *batchParams) appendTx(blockNum uint64, txRec types.TxRecord) error {
 		Epoch:             util.PtrToNullableInt64(txRec.Epoch),
 		TlsCertHash:       txRec.TLSCertHash,
 		CreatedAt:         util.Int64ToNullableTimestamp(txRec.CreatedAt),
+		Metadata:          txRec.Metadata,
 	})
 	for _, ns := range txRec.Namespaces {
 		p.appendNamespace(blockNum, txRec.TxNum, ns)
