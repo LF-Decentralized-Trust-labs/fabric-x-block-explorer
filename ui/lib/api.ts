@@ -86,6 +86,7 @@ interface RestTransaction {
   epoch: number | null;
   tls_cert_hash: string | null;
   created_at: string;
+  metadata?: string[] | null;
   namespaces: RestNamespace[];
   read_writes?: RestReadWrite[];
   blind_writes?: RestBlindWrite[];
@@ -215,6 +216,7 @@ export interface Transaction {
   epoch: number | null;
   tls_cert_hash: string | null;
   created_at: string;
+  metadata: string[] | null;
   namespaces: NamespaceRecord[];
   blind_writes: BlindWriteRecord[];
   endorsements: EndorsementRecord[];
@@ -291,6 +293,7 @@ const transformTransaction = (tx: RestTransaction): Transaction => ({
   epoch: tx.epoch ?? null,
   tls_cert_hash: tx.tls_cert_hash ?? null,
   created_at: tx.created_at ?? '',
+  metadata: tx.metadata ?? null,
   namespaces: (tx.namespaces ?? []).map((n) => ({ ns_id: n.ns_id, ns_version: n.ns_version })),
   read_writes: (tx.read_writes ?? []).map((w) => ({
     namespace: w.ns_id,

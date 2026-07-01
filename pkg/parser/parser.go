@@ -46,6 +46,7 @@ type txMeta struct {
 	epoch             *uint64
 	tlsCertHash       []byte
 	createdAt         *int64
+	metadata          [][]byte
 }
 
 // nsData wraps a TxNamespace with its associated endorsement records.
@@ -271,7 +272,7 @@ func extractCreatorInfo(meta *txMeta, pl *common.Payload) {
 	}
 }
 
-// extractChaincodeData extracts the chaincode name from the first namespace of the transaction.
+// extractChaincodeData extracts the chaincode name and metadata from the transaction.
 func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	tx, err := serialization.UnmarshalTx(pl.Data)
 	if err != nil {
@@ -279,6 +280,10 @@ func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	}
 	if len(tx.Namespaces) > 0 && tx.Namespaces[0] != nil && tx.Namespaces[0].NsId != "" {
 		meta.chaincodeName = &tx.Namespaces[0].NsId
+	}
+	// Extract transaction metadata (introduced in committer v1.0.3)
+	if len(tx.Metadata) > 0 {
+		meta.metadata = tx.Metadata
 	}
 }
 
@@ -323,6 +328,7 @@ func buildMinimalTxRecord(meta txMeta) types.TxRecord {
 		Epoch:             meta.epoch,
 		TLSCertHash:       meta.tlsCertHash,
 		CreatedAt:         meta.createdAt,
+		Metadata:          meta.metadata,
 	}
 }
 
@@ -343,6 +349,7 @@ func buildTxRecord(meta txMeta, nsList []nsData) types.TxRecord {
 		Epoch:             meta.epoch,
 		TLSCertHash:       meta.tlsCertHash,
 		CreatedAt:         meta.createdAt,
+		Metadata:          meta.metadata,
 		Namespaces:        make([]types.TxNamespaceRecord, 0, len(nsList)),
 	}
 
