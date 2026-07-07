@@ -17,6 +17,29 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 
 ---
 
+## Docker Image
+
+The explorer is published as a multi-platform Docker image to the GitHub Container Registry on every release tag (`v*`):
+
+```
+ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:<version>
+ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+```
+
+### Pull
+
+```bash
+# Pin to a specific release
+docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
+
+# Or use the floating latest tag
+docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+```
+
+The image is built for `linux/amd64`, `linux/arm64`, and `linux/s390x`. Docker will automatically select the right variant for your platform.
+
+---
+
 ## Requirements
 
 | Tool | Version | Purpose |

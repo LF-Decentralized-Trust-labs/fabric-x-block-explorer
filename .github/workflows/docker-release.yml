@@ -1,0 +1,75 @@
+# Copyright IBM Corp. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+---
+name: Release Docker Image
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-release:
+    name: Build and push multi-platform Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract and validate version from tag
+        id: extract
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+            FILE_VERSION="$(cat VERSION)"
+            if [[ "${TAG_VERSION}" != "${FILE_VERSION}" ]]; then
+              echo "❌ Tag version v${TAG_VERSION} does not match VERSION file (${FILE_VERSION})"
+              echo "   Update the VERSION file to ${TAG_VERSION} before tagging."
+              exit 1
+            fi
+            echo "VERSION=${TAG_VERSION}" >> "$GITHUB_ENV"
+            echo "✅ Tag validated and matches VERSION file: ${TAG_VERSION}"
+          else
+            echo "❌ Invalid tag format: ${GITHUB_REF}. Expected: refs/tags/v<semver>"
+            exit 1
+          fi
+
+      - name: Set image metadata
+        run: |
+          echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+          echo "REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          # Normalise to lowercase — GHCR requires lowercase owner/repo paths.
+          echo "GHCR_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Build and push multi-platform Docker image
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64,linux/s390x
+          push: true
+          tags: |
+            ${{ env.GHCR_REPO }}:${{ env.VERSION }}
+            ${{ env.GHCR_REPO }}:latest
+          build-args: |
+            VERSION=${{ env.VERSION }}
+            CREATED=${{ env.CREATED }}
+            REVISION=${{ env.REVISION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
