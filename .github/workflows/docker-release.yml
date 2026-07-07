@@ -5,6 +5,8 @@ name: Release Docker Image
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
@@ -32,30 +34,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract and validate version from tag
-        id: extract
+      - name: Resolve version and image tags
+        id: meta
         run: |
-          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
-            TAG_VERSION="${BASH_REMATCH[1]}"
-            FILE_VERSION="$(cat VERSION)"
-            if [[ "${TAG_VERSION}" != "${FILE_VERSION}" ]]; then
-              echo "❌ Tag version v${TAG_VERSION} does not match VERSION file (${FILE_VERSION})"
-              echo "   Update the VERSION file to ${TAG_VERSION} before tagging."
-              exit 1
-            fi
-            echo "VERSION=${TAG_VERSION}" >> "$GITHUB_ENV"
-            echo "✅ Tag validated and matches VERSION file: ${TAG_VERSION}"
-          else
-            echo "❌ Invalid tag format: ${GITHUB_REF}. Expected: refs/tags/v<semver>"
-            exit 1
-          fi
-
-      - name: Set image metadata
-        run: |
+          # Normalise to lowercase — GHCR requires lowercase owner/repo paths.
+          GHCR_REPO="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "GHCR_REPO=${GHCR_REPO}" >> "$GITHUB_ENV"
           echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          # Normalise to lowercase — GHCR requires lowercase owner/repo paths.
-          echo "GHCR_REPO=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+          # Read the canonical version from the VERSION file.
+          VERSION="$(cat VERSION | tr -d '[:space:]')"
+
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            # ── Tagged release ────────────────────────────────────────────────
+            # Extra guard: the tag must match the VERSION file exactly.
+            TAG_VERSION="${BASH_REMATCH[1]}"
+            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+              echo "❌ Tag v${TAG_VERSION} does not match VERSION file (${VERSION})"
+              echo "   Update VERSION to ${TAG_VERSION} before tagging."
+              exit 1
+            fi
+            echo "✅ Tag matches VERSION file: ${VERSION}"
+          else
+            # ── Merge to main ─────────────────────────────────────────────────
+            echo "✅ Build from VERSION file: ${VERSION}"
+          fi
+
+          # Both triggers publish :<version> and :latest.
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+          printf 'TAGS=%s:%s\n%s:latest\n' \
+            "${GHCR_REPO}" "${VERSION}" \
+            "${GHCR_REPO}" >> "$GITHUB_ENV"
 
       - name: Build and push multi-platform Docker image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
@@ -64,9 +74,7 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64,linux/s390x
           push: true
-          tags: |
-            ${{ env.GHCR_REPO }}:${{ env.VERSION }}
-            ${{ env.GHCR_REPO }}:latest
+          tags: ${{ env.TAGS }}
           build-args: |
             VERSION=${{ env.VERSION }}
             CREATED=${{ env.CREATED }}
