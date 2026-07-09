@@ -63,9 +63,7 @@ jobs:
 
           # Both triggers publish :<version> and :latest.
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
-          printf 'TAGS=%s:%s\n%s:latest\n' \
-            "${GHCR_REPO}" "${VERSION}" \
-            "${GHCR_REPO}" >> "$GITHUB_ENV"
+          echo "TAGS=${GHCR_REPO}:${VERSION},${GHCR_REPO}:latest" >> "$GITHUB_ENV"
 
       - name: Build and push multi-platform Docker image
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
