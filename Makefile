@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node ui-install ui-dev ui-build ui-lint dev help
+.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node pull-test-node ui-install ui-dev ui-build ui-lint dev help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -16,7 +16,11 @@ REST_BASE_URL      ?= http://127.0.0.1:8080
 SMOKE_NAMESPACE    ?= _meta
 WAIT_RETRIES       ?= 60
 WAIT_SLEEP_SECS    ?= 2
-VERSION            ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# VERSION is the canonical release version, read from the VERSION file.
+# When a git tag exists, git describe produces the exact version (e.g. v0.1.0).
+# Between tags it auto-generates a pre-release suffix: v0.1.0-3-gabcdef.
+# The override allows CI or a developer to pin a specific value: make build VERSION=0.2.0
+VERSION            ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || cat VERSION)
 BINARY             := ./bin/explorer
 CLI_PKG            := github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli
 LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
@@ -184,7 +188,17 @@ run-down: ## Stop and remove Docker Compose services and volumes
 	@if [ -z "$(COMPOSE)" ]; then echo "❌ Neither 'docker compose' nor 'docker-compose' is available"; exit 1; fi
 	$(COMPOSE) down -v
 
-build-test-node: ## Build the fabric-x-committer all-in-one test node Docker image
+pull-test-node: ## Pull the pre-built committer test node image (fast path for local dev; CI uses check_image step instead)
+	@if docker image inspect $(TEST_NODE_IMAGE) >/dev/null 2>&1; then \
+		echo "✅ $(TEST_NODE_IMAGE) already present — skipping pull"; \
+	elif docker pull $(TEST_NODE_IMAGE) 2>/dev/null; then \
+		echo "✅ $(TEST_NODE_IMAGE) pulled from registry"; \
+	else \
+		echo "⚠️  $(TEST_NODE_IMAGE) not on registry — build it with: make build-test-node"; \
+		exit 1; \
+	fi
+
+build-test-node: ## Build the fabric-x-committer all-in-one test node Docker image from source (slow, use pull-test-node in CI)
 	@if docker image inspect $(TEST_NODE_IMAGE) >/dev/null 2>&1; then \
 		echo "✅ $(TEST_NODE_IMAGE) already present — skipping build"; \
 	else \
@@ -207,7 +221,7 @@ kill-test-docker: ## Stop and remove all sc_test_* Docker containers (test clean
 		echo "No sc_test_* containers running"; \
 	fi
 
-test-integration: ensure-db build-test-node ## Run integration tests (starts committer test node + explorer against live DB)
+test-integration: ensure-db pull-test-node ## Run integration tests (starts committer test node + explorer against live DB); pulls pre-built image instead of building from source
 	@echo "Running integration tests..."
 	gotestsum --rerun-fails=1 --format testname --packages ./pkg/integration/... -- -v -count=1 -timeout=10m
 
