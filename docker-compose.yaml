@@ -1,5 +1,17 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+#
+# Production-ready stack: PostgreSQL (official image) + Explorer backend + UI.
+# No source code required — all images are pulled from GHCR.
+#
+# Usage:
+#   docker compose up -d
+#
+# The sidecar must be reachable on the host machine (default port 4001).
+# See config.docker.yaml or set EXPLORER_SIDECAR_* env vars to customise.
+#
+# To build images locally from source instead of pulling from GHCR:
+#   docker compose up -d --build
 
 services:
   postgres:
@@ -29,7 +41,9 @@ services:
           memory: 256M
 
   explorer:
-    build: .
+    image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+    # Uncomment to build locally from source instead:
+    # build: .
     container_name: fabric-explorer-backend
     depends_on:
       postgres:
@@ -57,11 +71,13 @@ services:
           memory: 512M
 
   ui:
-    build:
-      context: ./ui
-      dockerfile: Dockerfile
-      args:
-        - BACKEND_URL=http://explorer:8080
+    image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-ui:latest
+    # Uncomment to build locally from source instead:
+    # build:
+    #   context: ./ui
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - BACKEND_URL=http://explorer:8080
     container_name: fabric-explorer-ui
     depends_on:
       explorer:
@@ -69,6 +85,7 @@ services:
     ports:
       - "${UI_PORT:-3000}:3000"
     environment:
+      - BACKEND_URL=http://explorer:8080
       - NEXT_PUBLIC_BACKEND_DISPLAY_URL=${NEXT_PUBLIC_BACKEND_DISPLAY_URL:-http://localhost:8080}
     restart: unless-stopped
     healthcheck:

@@ -15,10 +15,50 @@ permissions:
   packages: write
 
 jobs:
+  # ── Shared: resolve version and validate tag ──────────────────────────────
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      ghcr_repo: ${{ steps.resolve.outputs.ghcr_repo }}
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Resolve version
+        id: resolve
+        run: |
+          # Normalise to lowercase — GHCR requires lowercase owner/repo paths.
+          GHCR_REPO="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
+          echo "ghcr_repo=${GHCR_REPO}" >> "$GITHUB_OUTPUT"
+
+          VERSION="$(cat VERSION | tr -d '[:space:]')"
+
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            TAG_VERSION="${BASH_REMATCH[1]}"
+            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
+              echo "❌ Tag v${TAG_VERSION} does not match VERSION file (${VERSION})"
+              echo "   Update VERSION to ${TAG_VERSION} before tagging."
+              exit 1
+            fi
+            echo "✅ Tag matches VERSION file: ${VERSION}"
+          else
+            echo "✅ Build from VERSION file: ${VERSION}"
+          fi
+
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  # ── Backend-only image ────────────────────────────────────────────────────
+  # A minimal image containing just the Go binary. Use this when you manage
+  # PostgreSQL and the UI separately (e.g. via docker-compose.yaml).
+  # Platforms: linux/amd64, linux/arm64, linux/s390x
+  # Tags: :<version>, :latest
   docker-release:
-    name: Build and push multi-platform Docker image
+    name: Build and push backend image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    needs: resolve-version
 
     steps:
       - name: Checkout source code
@@ -72,10 +112,53 @@ jobs:
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64,linux/s390x
           push: true
-          tags: ${{ env.TAGS }}
+          tags: |
+            ${{ needs.resolve-version.outputs.ghcr_repo }}:${{ needs.resolve-version.outputs.version }}
+            ${{ needs.resolve-version.outputs.ghcr_repo }}:latest
           build-args: |
-            VERSION=${{ env.VERSION }}
-            CREATED=${{ env.CREATED }}
-            REVISION=${{ env.REVISION }}
+            VERSION=${{ needs.resolve-version.outputs.version }}
+            CREATED=${{ github.event.head_commit.timestamp }}
+            REVISION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ── UI image ─────────────────────────────────────────────────────────────
+  # Next.js production image. Used by docker-compose.yaml alongside the
+  # backend image and the official postgres:16-alpine image so users can run
+  # the full stack with a single `docker compose up` — no source clone needed.
+  # Platforms: linux/amd64, linux/arm64
+  # Tags: ghcr.io/.../fabric-x-block-explorer-ui:<version>, :latest
+  docker-release-ui:
+    name: Build and push UI image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: resolve-version
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
+        with:
+          context: ./ui
+          file: ./ui/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:${{ needs.resolve-version.outputs.version }}
+            ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:latest
+          build-args: |
+            VERSION=${{ needs.resolve-version.outputs.version }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
