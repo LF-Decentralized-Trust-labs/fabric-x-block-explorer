@@ -17,26 +17,41 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 
 ---
 
-## Docker Image
+## Quick Start
 
-The explorer is published as a multi-platform Docker image to the GitHub Container Registry on every release tag (`v*`):
-
-```
-ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:<version>
-ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
-```
-
-### Pull
+Run the full stack (PostgreSQL + backend + UI) with no source code required:
 
 ```bash
-# Pin to a specific release
-docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
+# 1. Download the compose file
+curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/docker-compose.yaml \
+  -o docker-compose.yaml
 
-# Or use the floating latest tag
-docker pull ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+# 2. Start all three services — images are pulled automatically from GHCR
+docker compose up -d
 ```
 
-The image is built for `linux/amd64`, `linux/arm64`, and `linux/s390x`. Docker will automatically select the right variant for your platform.
+| Service | URL |
+|---|---|
+| UI | http://localhost:3000 |
+| REST API | http://localhost:8080 |
+| Swagger | http://localhost:8080/docs |
+
+See **[Option 2 — Docker Compose](#option-2--docker-compose-recommended-for-production-like-deployment)** for full details, environment variables, and data persistence.
+
+---
+
+## Docker Images
+
+Two images are published to the GitHub Container Registry (GHCR) on every push
+to `main` and every release tag (`v*`):
+
+| Image | Tags | Contents | Platforms |
+|---|---|---|---|
+| `ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer` | `:<version>` `:latest` | Explorer backend (Go binary) | `linux/amd64`, `linux/arm64`, `linux/s390x` |
+| `ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-ui` | `:<version>` `:latest` | Next.js UI | `linux/amd64`, `linux/arm64` |
+
+The database uses the official `postgres:16-alpine` image — the project does
+not ship a custom database image.
 
 ---
 
@@ -86,15 +101,24 @@ make dev-down
 
 ---
 
-## Option 2 — Docker Compose (production-like, needs an external sidecar)
+## Option 2 — Docker Compose (recommended for production-like deployment)
 
-Runs the full stack (PostgreSQL + explorer + UI) in Docker containers. You must have a running Fabric-X sidecar reachable on your host machine (default port `4001`).
+Runs **PostgreSQL + Explorer backend + UI** as three separate containers using
+published images from GHCR. No source code required. The database uses the
+official `postgres:16-alpine` image.
 
-### Quick Start
+You must have a running Fabric-X sidecar reachable on your host machine
+(default port `4001`).
+
+### Quick start (no source code needed)
 
 ```bash
-# Start postgres + explorer + UI
-docker-compose up --build
+# Download the compose file
+curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/docker-compose.yaml \
+  -o docker-compose.yaml
+
+# Start all three services (images pulled automatically from GHCR)
+docker compose up -d
 
 # Services:
 #   postgres  → localhost:5432
@@ -102,13 +126,14 @@ docker-compose up --build
 #   ui        → http://localhost:3000
 
 # Tear down (keeps data)
-docker-compose down
+docker compose down
 
 # Tear down and remove volumes (deletes all data)
-docker-compose down -v
+docker compose down -v
 ```
 
-The sidecar endpoint is set in `config.docker.yaml`. By default it points to `host.docker.internal:4001` (port 4001 on your host machine).
+The sidecar endpoint defaults to `host.docker.internal:4001`. Override it in
+`config.docker.yaml` or via environment variables.
 
 ### Environment Variables
 
@@ -393,8 +418,12 @@ make lint              # Run golangci-lint
 │   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)
 ├── config.local.yaml       # Config for local dev (postgres :5433, sidecar :4001)
 ├── config.docker.yaml      # Config for Docker Compose stack (sidecar via host.docker.internal)
-├── docker-compose.yaml     # Stack: postgres + explorer + ui
-├── Dockerfile              # Multi-stage explorer binary image
+├── docker-compose.yaml     # Production stack: postgres:16-alpine + explorer + ui (no build needed)
+├── Dockerfile              # Multi-stage backend image → ghcr.io/.../fabric-x-block-explorer
+├── ui/Dockerfile           # Multi-stage Next.js image → ghcr.io/.../fabric-x-block-explorer-ui
+├── .github/workflows/
+│   ├── ci.yaml             # Lint, test, build
+│   └── docker-release.yml  # Publishes backend + UI images to GHCR on main / v* tag
 ├── Makefile
 └── sqlc.yaml               # sqlc codegen configuration
 ```
