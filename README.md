@@ -17,6 +17,13 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 
 ---
 
+## Contributing and Security
+
+- **Contributing** — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for DCO sign-off requirements, branch naming, how to run tests, and the code-review process.
+- **Security** — see [`SECURITY.md`](SECURITY.md) for the responsible disclosure policy. Do not open public issues for vulnerabilities.
+
+---
+
 ## Quick Start
 
 Run the full stack (PostgreSQL + backend + UI) with no source code required:
@@ -97,8 +104,7 @@ Using `:latest` in production means you will automatically pick up every push to
 | npm | 9+ | UI package manager |
 | Docker | 28+ | All container-based workflows |
 | `docker-compose` or `docker compose` | v2 recommended | Docker Compose stack |
-| `curl` + `python3` | any | REST smoke tests |
-| `jq` | any | Self-contained live stack (`make dev`) |
+| `curl` + `python3` | any | REST smoke tests (`make smoke-rest`) |
 
 ---
 
@@ -454,9 +460,14 @@ make lint              # Run golangci-lint
 ├── docker-compose.yaml     # Production stack: postgres:16-alpine + explorer + ui (no build needed)
 ├── Dockerfile              # Multi-stage backend image → ghcr.io/.../fabric-x-block-explorer
 ├── ui/Dockerfile           # Multi-stage Next.js image → ghcr.io/.../fabric-x-block-explorer-ui
-├── .github/workflows/
-│   ├── ci.yaml             # Lint, test, build
-│   └── docker-release.yml  # Publishes backend + UI images to GHCR on main / v* tag
+├── .github/
+│   ├── CODEOWNERS          # Auto-review assignments per path
+│   └── workflows/
+│       ├── ci.yaml             # Lint, test, build on push/PR
+│       └── docker-release.yml  # Publishes backend + UI images to GHCR on main / v* tag
+├── VERSION                 # Canonical release version (read by CI and make build)
+├── CONTRIBUTING.md         # How to contribute, DCO, branch/commit conventions
+├── SECURITY.md             # Responsible disclosure policy
 ├── Makefile
 └── sqlc.yaml               # sqlc codegen configuration
 ```
