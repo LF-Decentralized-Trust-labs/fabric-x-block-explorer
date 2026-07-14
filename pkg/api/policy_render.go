@@ -8,7 +8,7 @@ package api
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"google.golang.org/protobuf/proto"
@@ -155,7 +155,7 @@ func renderConfigGroupTree(path string, group *commonpb.ConfigGroup, depth int) 
 	for name := range group.Policies {
 		policyNames = append(policyNames, name)
 	}
-	sort.Strings(policyNames)
+	slices.Sort(policyNames)
 	for _, name := range policyNames {
 		if expr := renderConfigPolicy(group.Policies[name]); expr != "" {
 			lines = append(lines, fmt.Sprintf("%s%s: %s", prefix, name, expr))
@@ -166,7 +166,7 @@ func renderConfigGroupTree(path string, group *commonpb.ConfigGroup, depth int) 
 	for name := range group.Groups {
 		subNames = append(subNames, name)
 	}
-	sort.Strings(subNames)
+	slices.Sort(subNames)
 	for _, name := range subNames {
 		if sub := renderConfigGroupTree(prefix+name, group.Groups[name], depth+1); sub != "" {
 			lines = append(lines, sub)

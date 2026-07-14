@@ -10,7 +10,7 @@ import (
 	"context"
 	"embed"
 	"io/fs"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/cockroachdb/errors"
@@ -91,7 +91,7 @@ func migrationFileNames() ([]string, error) {
 			names = append(names, e.Name())
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names, nil
 }
 

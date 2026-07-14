@@ -20,7 +20,7 @@ import (
 // DBConfig holds PostgreSQL connection configuration.
 type DBConfig struct {
 	User            string                   `mapstructure:"user"      yaml:"user"`
-	Password        string                   `mapstructure:"password"  yaml:"password"` //nolint:gosec
+	Password        string                   `mapstructure:"password"  yaml:"password"`
 	DBName          string                   `mapstructure:"dbname"    yaml:"dbname"`
 	Endpoints       []*connection.Endpoint   `mapstructure:"endpoints" yaml:"endpoints"`
 	TLS             dbconn.DatabaseTLSConfig `mapstructure:"tls"       yaml:"tls"`

@@ -458,7 +458,8 @@ func buildBlock(t *testing.T, spec blockSpec) *common.Block {
 
 	filter := make([]byte, len(spec.statuses))
 	for i, s := range spec.statuses {
-		filter[i] = byte(s)
+		// protobuf Status values are small non-negative integers — overflow is impossible.
+		filter[i] = byte(s) //nolint:gosec // G115
 	}
 
 	return &common.Block{
