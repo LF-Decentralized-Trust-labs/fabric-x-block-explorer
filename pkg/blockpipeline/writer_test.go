@@ -33,7 +33,7 @@ type writerTestEnv struct {
 	done chan error
 }
 
-func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv {
+func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv { //nolint:revive
 	t.Helper()
 	s := writerTestEnv{
 		in:   make(chan *types.ProcessedBlock, 10),
