@@ -33,7 +33,6 @@ type writerTestEnv struct {
 	done chan error
 }
 
-//nolint:revive // t precedes ctx to enable t.Helper() marking.
 func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv {
 	t.Helper()
 	s := writerTestEnv{
