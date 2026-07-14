@@ -33,7 +33,7 @@ Run the full stack (PostgreSQL + backend + UI) with no source code required:
 curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/docker-compose.yaml \
   -o docker-compose.yaml
 
-# 2. Start all three services — images are pulled automatically from GHCR
+# 2. Start all three services — images are pulled automatically from Docker Hub / GHCR
 docker compose up -d
 ```
 
@@ -49,13 +49,12 @@ See **[Option 2 — Docker Compose](#option-2--docker-compose-recommended-for-pr
 
 ## Docker Images
 
-Two images are published to the GitHub Container Registry (GHCR) on every push
-to `main` and every release tag (`v*`):
+Two images are published to **Docker Hub** and the **GitHub Container Registry (GHCR)** on every release tag (`v*`):
 
-| Image | Tags | Contents | Platforms |
-|---|---|---|---|
-| `ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer` | `:<version>` `:latest` | Explorer backend (Go binary) | `linux/amd64`, `linux/arm64`, `linux/s390x` |
-| `ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer-ui` | `:<version>` `:latest` | Next.js UI | `linux/amd64`, `linux/arm64` |
+| Image | Registry | Tags | Contents | Platforms |
+|---|---|---|---|---|
+| `fabric-x-block-explorer` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Explorer backend (Go binary, UBI9 base) | `linux/amd64`, `linux/arm64`, `linux/s390x` |
+| `fabric-x-block-explorer-ui` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Next.js UI | `linux/amd64`, `linux/arm64` |
 
 The database uses the official `postgres:16-alpine` image — the project does
 not ship a custom database image.
@@ -72,26 +71,29 @@ The canonical version is tracked in the [`VERSION`](VERSION) file at the reposit
 | Tag | Meaning |
 |---|---|
 | `v0.1.0` | Immutable release tag — always points to the exact release commit |
-| `latest` | Floating tag — updated on every push to `main` and every release |
+| `latest` | Floating tag — updated on every release tag |
 
 Always **pin to a specific version tag** in production:
 
 ```yaml
-# docker-compose.yaml — production-safe pin
-image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
+# docker-compose.yaml — production-safe pin (Docker Hub)
+image: docker.io/hyperledger/fabric-x-block-explorer:0.1.0
+# or equivalently via GHCR:
+# image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
 ```
 
-Using `:latest` in production means you will automatically pick up every push to
-`main`, including pre-release or breaking changes.
+Using `:latest` in production means you will automatically pick up every release,
+including potentially breaking changes.
 
 ### How a release is cut
 
 1. Update [`VERSION`](VERSION) to the new version (e.g. `0.2.0`).
 2. Open and merge a PR with that change.
 3. Create and push a Git tag matching the version: `git tag v0.2.0 && git push origin v0.2.0`.
-4. The [`docker-release`](.github/workflows/docker-release.yml) workflow validates
-   the tag matches `VERSION`, then builds and pushes both images tagged `:<version>`
-   and `:latest` to GHCR.
+4. The [`docker-release`](.github/workflows/docker-release.yml) workflow triggers on the tag,
+   cross-compiles the Go binary for `linux/amd64`, `linux/arm64`, `linux/s390x` via
+   `make build-release`, then builds and pushes both images tagged `:<version>` and `:latest`
+   to Docker Hub and GHCR.
 
 ---
 
@@ -387,6 +389,7 @@ make dev-down          # 🛑 Tear down everything started by make dev
 
 # ── Building ─────────────────────────────────────────────────────
 make build             # Build ./bin/explorer
+make build-release     # Cross-compile for linux/amd64, linux/arm64, linux/s390x (used by CI release)
 
 # ── Testing ──────────────────────────────────────────────────────
 make test-no-db        # Tests that don't need a database
@@ -452,19 +455,22 @@ make lint              # Run golangci-lint
 │   │   ├── api.ts          # Typed REST client + response transform layer
 │   │   ├── policyDecoder.ts# Human-readable policy rule decoder
 │   │   └── utils.ts        # Hex decode, formatting, validation code helpers
-│   └── Dockerfile          # Multi-stage Next.js production image
+├── docker/
+│   └── images/
+│       ├── release/
+│       │   └── Dockerfile  # UBI9 copy-only backend image (consumes binaries from make build-release)
+│       └── ui/
+│           └── Dockerfile  # Multi-stage Next.js production image
 ├── scripts/
 │   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)
 ├── config.local.yaml       # Config for local dev (postgres :5433, sidecar :4001)
 ├── config.docker.yaml      # Config for Docker Compose stack (sidecar via host.docker.internal)
 ├── docker-compose.yaml     # Production stack: postgres:16-alpine + explorer + ui (no build needed)
-├── Dockerfile              # Multi-stage backend image → ghcr.io/.../fabric-x-block-explorer
-├── ui/Dockerfile           # Multi-stage Next.js image → ghcr.io/.../fabric-x-block-explorer-ui
 ├── .github/
 │   ├── CODEOWNERS          # Auto-review assignments per path
 │   └── workflows/
 │       ├── ci.yaml             # Lint, test, build on push/PR
-│       └── docker-release.yml  # Publishes backend + UI images to GHCR on main / v* tag
+│       └── docker-release.yml  # Publishes backend + UI images to Docker Hub + GHCR on v* tag
 ├── VERSION                 # Canonical release version (read by CI and make build)
 ├── CONTRIBUTING.md         # How to contribute, DCO, branch/commit conventions
 ├── SECURITY.md             # Responsible disclosure policy

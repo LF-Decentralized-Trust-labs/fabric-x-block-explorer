@@ -37,5 +37,6 @@ nohup.out
 
 # Compose / docker (not part of the build)
 docker-compose*.yaml
-Dockerfile
 .dockerignore
+# docker/ dir itself is not needed in the build context
+docker/

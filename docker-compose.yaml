@@ -43,7 +43,9 @@ services:
   explorer:
     image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
     # Uncomment to build locally from source instead:
-    # build: .
+    # build:
+    #   context: .
+    #   dockerfile: docker/images/release/Dockerfile
     container_name: fabric-explorer-backend
     depends_on:
       postgres:
@@ -53,7 +55,10 @@ services:
     # Allows the explorer to reach a sidecar running on the host machine.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["start", "--config", "config.docker.yaml"]
+    # Mount config at runtime — not baked into the image.
+    volumes:
+      - ./config.docker.yaml:/home/explorer/config.docker.yaml:ro
+    command: ["start", "--config", "/home/explorer/config.docker.yaml"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
@@ -75,7 +80,7 @@ services:
     # Uncomment to build locally from source instead:
     # build:
     #   context: ./ui
-    #   dockerfile: Dockerfile
+    #   dockerfile: docker/images/ui/Dockerfile
     #   args:
     #     - BACKEND_URL=http://explorer:8080
     container_name: fabric-explorer-ui

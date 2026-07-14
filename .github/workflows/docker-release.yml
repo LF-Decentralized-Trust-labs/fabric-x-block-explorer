@@ -1,83 +1,62 @@
 # Copyright IBM Corp. All Rights Reserved.
+#
 # SPDX-License-Identifier: Apache-2.0
+#
 ---
-name: Release Docker Image
+name: Release Fabric-X Block Explorer Docker Image
 
 on:
   push:
-    branches:
-      - main
     tags:
-      - "v*"
-  # Dry-run on every PR targeting main: builds both images but does NOT push.
-  # This validates the Dockerfiles compile before a change is merged.
-  pull_request:
-    branches:
-      - main
+      - "v*"  # Trigger on tags like v0.0.1
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  # ── Shared: resolve version and validate tag ──────────────────────────────
-  resolve-version:
-    name: Resolve version
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.resolve.outputs.version }}
-      ghcr_repo: ${{ steps.resolve.outputs.ghcr_repo }}
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Resolve version
-        id: resolve
-        run: |
-          # Normalise to lowercase — GHCR requires lowercase owner/repo paths.
-          GHCR_REPO="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
-          echo "ghcr_repo=${GHCR_REPO}" >> "$GITHUB_OUTPUT"
-
-          VERSION="$(cat VERSION | tr -d '[:space:]')"
-
-          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
-            TAG_VERSION="${BASH_REMATCH[1]}"
-            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
-              echo "❌ Tag v${TAG_VERSION} does not match VERSION file (${VERSION})"
-              echo "   Update VERSION to ${TAG_VERSION} before tagging."
-              exit 1
-            fi
-            echo "✅ Tag matches VERSION file: ${VERSION}"
-          else
-            echo "✅ Build from VERSION file: ${VERSION}"
-          fi
-
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-
-  # ── Backend-only image ────────────────────────────────────────────────────
-  # A minimal image containing just the Go binary. Use this when you manage
-  # PostgreSQL and the UI separately (e.g. via docker-compose.yaml).
-  # Platforms: linux/amd64, linux/arm64, linux/s390x
-  # Tags: :<version>, :latest
   docker-release:
-    name: Build and push backend image
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: resolve-version
 
     steps:
       - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU (for cross-platform builds)
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract and Validate Version from Tag
+        id: extract
+        run: |
+          if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
+            echo "✅ Tag validated: $VERSION"
+          else
+            echo "❌ Invalid tag format: ${GITHUB_REF}. Expected format: refs/tags/v<semver>"
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
 
       - name: Resolve version and image tags
         id: meta
@@ -114,58 +93,39 @@ jobs:
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
         with:
           context: .
-          file: ./Dockerfile
+          file: ./docker/images/release/Dockerfile
           platforms: linux/amd64,linux/arm64,linux/s390x
-          # push=false on pull_request events (dry-run); push=true on push events.
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
-            ${{ needs.resolve-version.outputs.ghcr_repo }}:${{ needs.resolve-version.outputs.version }}
-            ${{ needs.resolve-version.outputs.ghcr_repo }}:latest
+            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:${{ env.VERSION }}
+            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:latest
+            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer:${{ env.VERSION }}
+            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer:latest
           build-args: |
-            VERSION=${{ needs.resolve-version.outputs.version }}
-            CREATED=${{ github.event.head_commit.timestamp }}
-            REVISION=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            BIN=explorer
+            SRC_BIN_PATH=release
+            PORTS=8080
+            VERSION=${{ env.VERSION }}
+            CREATED=${{ env.CREATED }}
+            REVISION=${{ env.REVISION }}
+          cache-from: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:buildcache
+          cache-to: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:buildcache,mode=max
 
-  # ── UI image ─────────────────────────────────────────────────────────────
-  # Next.js production image. Used by docker-compose.yaml alongside the
-  # backend image and the official postgres:16-alpine image so users can run
-  # the full stack with a single `docker compose up` — no source clone needed.
-  # Platforms: linux/amd64, linux/arm64
-  # Tags: ghcr.io/.../fabric-x-block-explorer-ui:<version>, :latest
-  docker-release-ui:
-    name: Build and push UI image
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: resolve-version
-
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2  # v3.10.0
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772  # v3.4.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push
-        uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
+      - name: Build and Push Multi-Platform Docker Image for Block Explorer UI
+        uses: docker/build-push-action@v6
         with:
           context: ./ui
-          file: ./ui/Dockerfile
+          file: ./docker/images/ui/Dockerfile
           platforms: linux/amd64,linux/arm64
-          # push=false on pull_request events (dry-run); push=true on push events.
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
-            ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:${{ needs.resolve-version.outputs.version }}
-            ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:latest
+            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:${{ env.VERSION }}
+            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:latest
+            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer-ui:${{ env.VERSION }}
+            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer-ui:latest
           build-args: |
-            VERSION=${{ needs.resolve-version.outputs.version }}
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,mode=max,scope=ui
+            VERSION=${{ env.VERSION }}
+            CREATED=${{ env.CREATED }}
+            REVISION=${{ env.REVISION }}
+          cache-from: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:buildcache
+          cache-to: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:buildcache,mode=max

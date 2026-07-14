@@ -1,7 +1,7 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-.PHONY: sqlc check-sqlc build lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node pull-test-node ui-install ui-dev ui-build ui-lint dev help
+.PHONY: sqlc check-sqlc build build-release lint test test-no-db test-requires-db test-all test-integration start-db ensure-db stop-db kill-test-docker coverage clean run run-down live-up live-down live-stop wait-rest smoke-rest smoke-live swagger check-live-tools ensure-compose build-test-node pull-test-node ui-install ui-dev ui-build ui-lint dev help
 
 DB_CONTAINER_NAME  := sc_test_postgres_unit_tests
 DB_PORT            := 5433
@@ -24,11 +24,22 @@ VERSION            ?= $(shell git describe --tags --always --dirty 2>/dev/null |
 BINARY             := ./bin/explorer
 CLI_PKG            := github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli
 LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
+RELEASE_DIR        := release
+RELEASE_ARCHES     := amd64 arm64 s390x
 
 build: ## Build the explorer binary with version injection
 	@mkdir -p bin
 	go build $(LD_FLAGS) -o $(BINARY) ./cmd/explorer/
 	@echo "✅ Built $(BINARY) version=$(VERSION)"
+
+build-release: ## Build release binaries for linux/amd64, linux/arm64, linux/s390x (used by docker-release CI)
+	@for arch in $(RELEASE_ARCHES); do \
+		mkdir -p $(RELEASE_DIR)/linux-$$arch; \
+		echo "Building linux/$$arch..."; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags '-w -s' \
+			-o $(RELEASE_DIR)/linux-$$arch/explorer ./cmd/explorer/; \
+	done
+	@echo "✅ Release binaries built in $(RELEASE_DIR)/"
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."

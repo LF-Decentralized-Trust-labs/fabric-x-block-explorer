@@ -29,5 +29,4 @@
 # CI / build
 /.github/           @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
 /Makefile           @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
-/Dockerfile         @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
-/ui/Dockerfile      @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
+/docker/            @LF-Decentralized-Trust-labs/fabric-x-block-explorer-maintainers
