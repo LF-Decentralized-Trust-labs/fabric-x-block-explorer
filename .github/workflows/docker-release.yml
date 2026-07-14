@@ -9,6 +9,11 @@ on:
       - main
     tags:
       - "v*"
+  # Dry-run on every PR targeting main: builds both images but does NOT push.
+  # This validates the Dockerfiles compile before a change is merged.
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -111,7 +116,8 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64,linux/arm64,linux/s390x
-          push: true
+          # push=false on pull_request events (dry-run); push=true on push events.
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ needs.resolve-version.outputs.ghcr_repo }}:${{ needs.resolve-version.outputs.version }}
             ${{ needs.resolve-version.outputs.ghcr_repo }}:latest
@@ -154,7 +160,8 @@ jobs:
           context: ./ui
           file: ./ui/Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: true
+          # push=false on pull_request events (dry-run); push=true on push events.
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:${{ needs.resolve-version.outputs.version }}
             ${{ needs.resolve-version.outputs.ghcr_repo }}-ui:latest

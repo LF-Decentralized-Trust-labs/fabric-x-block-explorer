@@ -14,6 +14,20 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
     go build -trimpath -o /explorer ./cmd/explorer
 
 FROM alpine:3.21
+
+# OCI image metadata — values injected by the CI build-push-action.
+ARG VERSION
+ARG CREATED
+ARG REVISION
+LABEL org.opencontainers.image.title="fabric-x-block-explorer" \
+      org.opencontainers.image.description="Lightweight Hyperledger Fabric block explorer backend (Go binary)" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.created="${CREATED}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.source="https://github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.vendor="LF Decentralized Trust"
+
 WORKDIR /app
 COPY --from=builder /explorer /usr/local/bin/explorer
 # Copy only the deployment config. config.local.yaml is for local developer use

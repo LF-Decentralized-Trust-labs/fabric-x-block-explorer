@@ -55,6 +55,39 @@ not ship a custom database image.
 
 ---
 
+## Versioning
+
+This project follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).
+The canonical version is tracked in the [`VERSION`](VERSION) file at the repository root.
+
+### Release tags
+
+| Tag | Meaning |
+|---|---|
+| `v0.1.0` | Immutable release tag — always points to the exact release commit |
+| `latest` | Floating tag — updated on every push to `main` and every release |
+
+Always **pin to a specific version tag** in production:
+
+```yaml
+# docker-compose.yaml — production-safe pin
+image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
+```
+
+Using `:latest` in production means you will automatically pick up every push to
+`main`, including pre-release or breaking changes.
+
+### How a release is cut
+
+1. Update [`VERSION`](VERSION) to the new version (e.g. `0.2.0`).
+2. Open and merge a PR with that change.
+3. Create and push a Git tag matching the version: `git tag v0.2.0 && git push origin v0.2.0`.
+4. The [`docker-release`](.github/workflows/docker-release.yml) workflow validates
+   the tag matches `VERSION`, then builds and pushes both images tagged `:<version>`
+   and `:latest` to GHCR.
+
+---
+
 ## Requirements
 
 | Tool | Version | Purpose |
