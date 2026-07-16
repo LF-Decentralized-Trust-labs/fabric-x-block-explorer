@@ -61,7 +61,7 @@ COPY --from=ui-builder --chown=10001:0 /app/.next/standalone /app/
 COPY --from=ui-builder --chown=10001:0 /app/.next/static     /app/.next/static
 
 # ── Entrypoint script ──────────────────────────────────────────────────────────
-COPY docker/images/combined/start.sh /app/start.sh
+COPY docker/images/release/start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
 # ── OCI metadata labels ────────────────────────────────────────────────────────

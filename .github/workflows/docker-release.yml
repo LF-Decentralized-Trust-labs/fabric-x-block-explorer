@@ -74,7 +74,7 @@ jobs:
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "TAGS=${GHCR_REPO}:${VERSION},${GHCR_REPO}:latest" >> "$GITHUB_ENV"
 
-      - name: Build and push combined multi-platform Docker image (backend + UI)
+      - name: Build and push multi-platform Docker image (backend + UI)
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
         with:
           context: .

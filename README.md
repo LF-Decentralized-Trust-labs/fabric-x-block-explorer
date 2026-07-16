@@ -463,8 +463,8 @@ make lint              # Run golangci-lint
 │   │   └── utils.ts        # Hex decode, formatting, validation code helpers
 ├── docker/
 │   └── images/
-│       └── combined/
-│           ├── Dockerfile  # Combined backend + UI image (node:22-slim, consumes binaries from make build-release)
+│       └── release/
+│           ├── Dockerfile  # Backend + UI image (node:22-slim, consumes binaries from make build-release)
 │           └── start.sh    # Entrypoint: forks Go backend, execs Next.js
 ├── scripts/
 │   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)

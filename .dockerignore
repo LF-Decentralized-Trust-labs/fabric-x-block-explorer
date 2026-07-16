@@ -1,6 +1,6 @@
 # The root image builds the Go backend (cmd/, pkg/, go.mod/sum,
-# config.docker.yaml) and the combined backend+UI image.
-# The ui/ directory is included so the combined Dockerfile can build it.
+# config.docker.yaml) and the release image (backend + UI).
+# The ui/ directory is included so the release Dockerfile can build it.
 
 # VCS / CI / editor
 .git

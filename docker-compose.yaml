@@ -55,7 +55,7 @@ services:
     # Uncomment to build locally from source instead (requires: make build-release):
     # build:
     #   context: .
-    #   dockerfile: docker/images/combined/Dockerfile
+    #   dockerfile: docker/images/release/Dockerfile
     container_name: fabric-explorer
     depends_on:
       postgres:
