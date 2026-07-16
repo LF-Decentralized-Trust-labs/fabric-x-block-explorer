@@ -35,9 +35,6 @@ RUN npm run build
 ###########################################
 FROM node:22-slim AS runner
 
-ARG BIN=explorer
-ARG SRC_BIN_PATH=release
-ARG TARGETOS=linux
 ARG TARGETARCH
 
 # Label args
@@ -57,7 +54,7 @@ RUN useradd -u 10001 -r -g root -s /sbin/nologin \
     chmod 0755 /home/explorer
 
 # ── Go backend binary (pre-built by CI via make build-release) ─────────────────
-COPY ${SRC_BIN_PATH}/${TARGETOS}-${TARGETARCH}/${BIN} /bin/explorer
+COPY release/linux-${TARGETARCH}/explorer /bin/explorer
 
 # ── Next.js standalone output ──────────────────────────────────────────────────
 COPY --from=ui-builder --chown=10001:0 /app/.next/standalone /app/

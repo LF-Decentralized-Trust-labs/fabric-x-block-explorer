@@ -25,14 +25,14 @@ BINARY             := ./bin/explorer
 CLI_PKG            := github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli
 LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
 RELEASE_DIR        := release
-RELEASE_ARCHES     := amd64 arm64 s390x
+RELEASE_ARCHES     := amd64 arm64
 
 build: ## Build the explorer binary with version injection
 	@mkdir -p bin
 	go build $(LD_FLAGS) -o $(BINARY) ./cmd/explorer/
 	@echo "✅ Built $(BINARY) version=$(VERSION)"
 
-build-release: ## Build release binaries for linux/amd64, linux/arm64, linux/s390x (used by docker-release CI)
+build-release: ## Build release binaries for linux/amd64, linux/arm64 (used by docker-release CI)
 	@for arch in $(RELEASE_ARCHES); do \
 		mkdir -p $(RELEASE_DIR)/linux-$$arch; \
 		echo "Building linux/$$arch..."; \

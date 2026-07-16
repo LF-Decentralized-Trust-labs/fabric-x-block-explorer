@@ -43,7 +43,3 @@ nohup.out
 # Compose / docker
 docker-compose*.yaml
 .dockerignore
-# Exclude individual docker image directories that are not needed at build time.
-# docker/images/combined/ must remain accessible so start.sh can be COPYed.
-docker/images/release/
-docker/images/ui/

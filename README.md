@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-
 # 2. (Optional) Edit config.docker.yaml to point at your sidecar host/port
 #    Default: sidecar on host.docker.internal:4001
 
-# 3. Start both services — images are pulled automatically from Docker Hub / GHCR
+# 3. Start both services — image is pulled automatically from GHCR
 docker compose up -d
 ```
 
@@ -54,11 +54,11 @@ See **[Option 2 — Docker Compose](#option-2--docker-compose-recommended-for-pr
 
 ## Docker Images
 
-One combined image is published to **Docker Hub** and the **GitHub Container Registry (GHCR)** on every release tag (`v*`):
+One combined image is published to the **GitHub Container Registry (GHCR)** on every release tag (`v*`):
 
 | Image | Registry | Tags | Contents | Platforms |
 |---|---|---|---|---|
-| `fabric-x-block-explorer` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Go backend (:8080) + Next.js UI (:3000) | `linux/amd64`, `linux/arm64` |
+| `fabric-x-block-explorer` | `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Go backend (:8080) + Next.js UI (:3000) | `linux/amd64`, `linux/arm64` |
 
 The database uses the official `postgres:16-alpine` image — the project does
 not ship a custom database image.
@@ -80,10 +80,8 @@ The canonical version is tracked in the [`VERSION`](VERSION) file at the reposit
 Always **pin to a specific version tag** in production:
 
 ```yaml
-# docker-compose.yaml — production-safe pin (Docker Hub)
-image: docker.io/hyperledger/fabric-x-block-explorer:0.1.0
-# or equivalently via GHCR:
-# image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
+# docker-compose.yaml — production-safe pin
+image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:0.1.0
 ```
 
 Using `:latest` in production means you will automatically pick up every release,
@@ -97,7 +95,7 @@ including potentially breaking changes.
 4. The [`docker-release`](.github/workflows/docker-release.yml) workflow triggers on the tag,
    cross-compiles the Go binary for `linux/amd64`, `linux/arm64` via
    `make build-release`, then builds and pushes the combined image tagged `:<version>` and `:latest`
-   to Docker Hub and GHCR.
+   to GHCR.
 
 ---
 
@@ -465,13 +463,9 @@ make lint              # Run golangci-lint
 │   │   └── utils.ts        # Hex decode, formatting, validation code helpers
 ├── docker/
 │   └── images/
-│       ├── combined/
-│       │   ├── Dockerfile  # Combined backend + UI image (node:22-slim, consumes binaries from make build-release)
-│       │   └── start.sh    # Entrypoint: forks Go backend, execs Next.js
-│       ├── release/
-│       │   └── Dockerfile  # UBI9 copy-only backend-only image (reference)
-│       └── ui/
-│           └── Dockerfile  # Standalone Next.js image (reference)
+│       └── combined/
+│           ├── Dockerfile  # Combined backend + UI image (node:22-slim, consumes binaries from make build-release)
+│           └── start.sh    # Entrypoint: forks Go backend, execs Next.js
 ├── scripts/
 │   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)
 ├── config.local.yaml       # Config for local dev (postgres :5433, sidecar :4001)
@@ -481,7 +475,7 @@ make lint              # Run golangci-lint
 │   ├── CODEOWNERS          # Auto-review assignments per path
 │   └── workflows/
 │       ├── ci.yaml             # Lint, test, build on push/PR
-│       └── docker-release.yml  # Publishes combined image to Docker Hub + GHCR on v* tag
+│       └── docker-release.yml  # Publishes combined image to GHCR on v* tag
 ├── VERSION                 # Canonical release version (read by CI and make build)
 ├── CONTRIBUTING.md         # How to contribute, DCO, branch/commit conventions
 ├── SECURITY.md             # Responsible disclosure policy

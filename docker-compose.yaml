@@ -52,13 +52,10 @@ services:
 
   explorer:
     image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
-    # Uncomment to build locally from source instead:
+    # Uncomment to build locally from source instead (requires: make build-release):
     # build:
     #   context: .
     #   dockerfile: docker/images/combined/Dockerfile
-    #   args:
-    #     - BIN=explorer
-    #     - SRC_BIN_PATH=release
     container_name: fabric-explorer
     depends_on:
       postgres:
