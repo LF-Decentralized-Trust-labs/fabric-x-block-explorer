@@ -58,6 +58,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Build release binaries (linux/amd64, linux/arm64)
+        run: make build-release RELEASE_ARCHES="amd64 arm64"
+
       - name: Resolve version and image tags
         id: meta
         run: |
@@ -89,12 +92,12 @@ jobs:
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "TAGS=${GHCR_REPO}:${VERSION},${GHCR_REPO}:latest" >> "$GITHUB_ENV"
 
-      - name: Build and push multi-platform Docker image
+      - name: Build and push combined multi-platform Docker image (backend + UI)
         uses: docker/build-push-action@14487ce63c7a62a4a324b0bfb37086795e31c6c1  # v6.16.0
         with:
           context: .
-          file: ./docker/images/release/Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/s390x
+          file: ./docker/images/combined/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:${{ env.VERSION }}
@@ -104,28 +107,8 @@ jobs:
           build-args: |
             BIN=explorer
             SRC_BIN_PATH=release
-            PORTS=8080
             VERSION=${{ env.VERSION }}
             CREATED=${{ env.CREATED }}
             REVISION=${{ env.REVISION }}
           cache-from: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:buildcache
           cache-to: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer:buildcache,mode=max
-
-      - name: Build and Push Multi-Platform Docker Image for Block Explorer UI
-        uses: docker/build-push-action@v6
-        with:
-          context: ./ui
-          file: ./docker/images/ui/Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:${{ env.VERSION }}
-            docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:latest
-            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer-ui:${{ env.VERSION }}
-            ghcr.io/${{ env.GHCR_PREFIX }}/fabric-x-block-explorer-ui:latest
-          build-args: |
-            VERSION=${{ env.VERSION }}
-            CREATED=${{ env.CREATED }}
-            REVISION=${{ env.REVISION }}
-          cache-from: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:buildcache
-          cache-to: type=registry,ref=docker.io/${{ env.IMAGE_PREFIX }}/fabric-x-block-explorer-ui:buildcache,mode=max

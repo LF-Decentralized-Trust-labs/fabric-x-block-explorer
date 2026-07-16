@@ -26,14 +26,19 @@ A lightweight block explorer for Hyperledger Fabric networks. It ingests blocks 
 
 ## Quick Start
 
-Run the full stack (PostgreSQL + backend + UI) with no source code required:
+Run the full stack (PostgreSQL + combined explorer image) with no source code required:
 
 ```bash
-# 1. Download the compose file
+# 1. Download the compose file and the sample config
 curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/docker-compose.yaml \
   -o docker-compose.yaml
+curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/config.docker.yaml \
+  -o config.docker.yaml
 
-# 2. Start all three services — images are pulled automatically from Docker Hub / GHCR
+# 2. (Optional) Edit config.docker.yaml to point at your sidecar host/port
+#    Default: sidecar on host.docker.internal:4001
+
+# 3. Start both services — images are pulled automatically from Docker Hub / GHCR
 docker compose up -d
 ```
 
@@ -49,12 +54,11 @@ See **[Option 2 — Docker Compose](#option-2--docker-compose-recommended-for-pr
 
 ## Docker Images
 
-Two images are published to **Docker Hub** and the **GitHub Container Registry (GHCR)** on every release tag (`v*`):
+One combined image is published to **Docker Hub** and the **GitHub Container Registry (GHCR)** on every release tag (`v*`):
 
 | Image | Registry | Tags | Contents | Platforms |
 |---|---|---|---|---|
-| `fabric-x-block-explorer` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Explorer backend (Go binary, UBI9 base) | `linux/amd64`, `linux/arm64`, `linux/s390x` |
-| `fabric-x-block-explorer-ui` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Next.js UI | `linux/amd64`, `linux/arm64` |
+| `fabric-x-block-explorer` | `docker.io/hyperledger` / `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Go backend (:8080) + Next.js UI (:3000) | `linux/amd64`, `linux/arm64` |
 
 The database uses the official `postgres:16-alpine` image — the project does
 not ship a custom database image.
@@ -91,8 +95,8 @@ including potentially breaking changes.
 2. Open and merge a PR with that change.
 3. Create and push a Git tag matching the version: `git tag v0.2.0 && git push origin v0.2.0`.
 4. The [`docker-release`](.github/workflows/docker-release.yml) workflow triggers on the tag,
-   cross-compiles the Go binary for `linux/amd64`, `linux/arm64`, `linux/s390x` via
-   `make build-release`, then builds and pushes both images tagged `:<version>` and `:latest`
+   cross-compiles the Go binary for `linux/amd64`, `linux/arm64` via
+   `make build-release`, then builds and pushes the combined image tagged `:<version>` and `:latest`
    to Docker Hub and GHCR.
 
 ---
@@ -144,8 +148,8 @@ make dev-down
 
 ## Option 2 — Docker Compose (recommended for production-like deployment)
 
-Runs **PostgreSQL + Explorer backend + UI** as three separate containers using
-published images from GHCR. No source code required. The database uses the
+Runs **PostgreSQL + Explorer** (backend + UI combined) as two containers using
+the published image from GHCR. No source code required. The database uses the
 official `postgres:16-alpine` image.
 
 You must have a running Fabric-X sidecar reachable on your host machine
@@ -154,17 +158,22 @@ You must have a running Fabric-X sidecar reachable on your host machine
 ### Quick start (no source code needed)
 
 ```bash
-# Download the compose file
+# 1. Download the compose file and the sample config
 curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/docker-compose.yaml \
   -o docker-compose.yaml
+curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/config.docker.yaml \
+  -o config.docker.yaml
 
-# Start all three services (images pulled automatically from GHCR)
+# 2. (Optional) Edit config.docker.yaml — set your sidecar address, credentials, etc.
+#    The defaults assume your sidecar runs on host.docker.internal:4001.
+
+# 3. Start both services (image pulled automatically from GHCR)
 docker compose up -d
 
 # Services:
 #   postgres  → localhost:5432
 #   explorer  → http://localhost:8080   (REST API + Swagger at /docs)
-#   ui        → http://localhost:3000
+#              http://localhost:3000    (UI)
 
 # Tear down (keeps data)
 docker compose down
@@ -221,8 +230,7 @@ The stack includes resource limits to prevent runaway containers:
 | Service | CPU Limit | Memory Limit | CPU Reservation | Memory Reservation |
 |---|---|---|---|---|
 | postgres | 1 core | 512 MB | 0.5 core | 256 MB |
-| explorer | 2 cores | 1 GB | 0.5 core | 512 MB |
-| ui | 1 core | 512 MB | 0.25 core | 256 MB |
+| explorer | 2 cores | 1.5 GB | 0.75 core | 768 MB |
 
 Adjust these in `docker-compose.yaml` under `deploy.resources` if needed.
 
@@ -389,7 +397,7 @@ make dev-down          # 🛑 Tear down everything started by make dev
 
 # ── Building ─────────────────────────────────────────────────────
 make build             # Build ./bin/explorer
-make build-release     # Cross-compile for linux/amd64, linux/arm64, linux/s390x (used by CI release)
+make build-release     # Cross-compile for linux/amd64, linux/arm64 (used by CI release)
 
 # ── Testing ──────────────────────────────────────────────────────
 make test-no-db        # Tests that don't need a database
@@ -457,20 +465,23 @@ make lint              # Run golangci-lint
 │   │   └── utils.ts        # Hex decode, formatting, validation code helpers
 ├── docker/
 │   └── images/
+│       ├── combined/
+│       │   ├── Dockerfile  # Combined backend + UI image (node:22-slim, consumes binaries from make build-release)
+│       │   └── start.sh    # Entrypoint: forks Go backend, execs Next.js
 │       ├── release/
-│       │   └── Dockerfile  # UBI9 copy-only backend image (consumes binaries from make build-release)
+│       │   └── Dockerfile  # UBI9 copy-only backend-only image (reference)
 │       └── ui/
-│           └── Dockerfile  # Multi-stage Next.js production image
+│           └── Dockerfile  # Standalone Next.js image (reference)
 ├── scripts/
 │   └── test-live.sh        # Self-contained live stack script (used by make dev / make swagger)
 ├── config.local.yaml       # Config for local dev (postgres :5433, sidecar :4001)
 ├── config.docker.yaml      # Config for Docker Compose stack (sidecar via host.docker.internal)
-├── docker-compose.yaml     # Production stack: postgres:16-alpine + explorer + ui (no build needed)
+├── docker-compose.yaml     # Production stack: postgres:16-alpine + combined explorer image (no build needed)
 ├── .github/
 │   ├── CODEOWNERS          # Auto-review assignments per path
 │   └── workflows/
 │       ├── ci.yaml             # Lint, test, build on push/PR
-│       └── docker-release.yml  # Publishes backend + UI images to Docker Hub + GHCR on v* tag
+│       └── docker-release.yml  # Publishes combined image to Docker Hub + GHCR on v* tag
 ├── VERSION                 # Canonical release version (read by CI and make build)
 ├── CONTRIBUTING.md         # How to contribute, DCO, branch/commit conventions
 ├── SECURITY.md             # Responsible disclosure policy
