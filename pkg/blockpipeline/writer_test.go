@@ -33,8 +33,7 @@ type writerTestEnv struct {
 	done chan error
 }
 
-//nolint:revive // t precedes ctx to enable t.Helper() marking.
-func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv {
+func startBlockWriter(t *testing.T, ctx context.Context) writerTestEnv { //nolint:revive
 	t.Helper()
 	s := writerTestEnv{
 		in:   make(chan *types.ProcessedBlock, 10),
