@@ -1,5 +1,6 @@
-# The root image builds only the Go backend (cmd/, pkg/, go.mod/sum,
-# config.docker.yaml). Everything else is excluded from the build context.
+# The root image builds the Go backend (cmd/, pkg/, go.mod/sum,
+# config.docker.yaml) and the release image (backend + UI).
+# The ui/ directory is included so the release Dockerfile can build it.
 
 # VCS / CI / editor
 .git
@@ -7,8 +8,12 @@
 .vscode
 .DS_Store
 
-# UI is built from its own ./ui context, not needed here (~470MB)
-ui
+# UI build artifacts (not source — the Dockerfile runs npm ci + build inside Docker)
+ui/node_modules
+ui/.next
+ui/out
+ui/.env
+ui/.env.*.local
 
 # Docs and markdown
 docs
@@ -35,7 +40,6 @@ coverage/
 *.tmp
 nohup.out
 
-# Compose / docker (not part of the build)
+# Compose / docker
 docker-compose*.yaml
-Dockerfile
 .dockerignore

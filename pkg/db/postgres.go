@@ -24,7 +24,7 @@ import (
 type Config struct {
 	Endpoints []*connection.Endpoint
 	User      string
-	Password  string //nolint:gosec // intentional: field holds a connection credential
+	Password  string
 	DBName    string
 	TLS       dbconn.DatabaseTLSConfig
 	MaxConns  int32

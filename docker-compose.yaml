@@ -1,5 +1,27 @@
 # Copyright IBM Corp. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
+#
+# Production-ready stack: PostgreSQL (official image) + Explorer (backend + UI combined).
+# No source code required — the combined image is pulled from GHCR.
+#
+# Usage:
+#   docker compose up -d
+#
+# The sidecar must be reachable on the host machine (default port 4001).
+# See config.docker.yaml or set EXPLORER_SIDECAR_* env vars to customise.
+#
+# To build the combined image locally from source instead of pulling from GHCR:
+#   docker compose up -d --build
+#
+# Prerequisites:
+#   The explorer requires a runtime config file. A ready-to-use sample is
+#   provided at config.docker.yaml in this repository. Copy it before starting:
+#
+#     curl -fsSL https://raw.githubusercontent.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/main/config.docker.yaml \
+#       -o config.docker.yaml
+#
+#   Edit config.docker.yaml to point at your sidecar host/port and (if needed)
+#   adjust database credentials before running docker compose up.
 
 services:
   postgres:
@@ -29,62 +51,47 @@ services:
           memory: 256M
 
   explorer:
-    build: .
-    container_name: fabric-explorer-backend
+    image: ghcr.io/lf-decentralized-trust-labs/fabric-x-block-explorer:latest
+    # Uncomment to build locally from source instead (requires: make build-release):
+    # build:
+    #   context: .
+    #   dockerfile: docker/images/release/Dockerfile
+    container_name: fabric-explorer
     depends_on:
       postgres:
         condition: service_healthy
     ports:
       - "${EXPLORER_PORT:-8080}:8080"
+      - "${UI_PORT:-3000}:3000"
     # Allows the explorer to reach a sidecar running on the host machine.
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    command: ["start", "--config", "config.docker.yaml"]
+    # Mount config at runtime — not baked into the image.
+    volumes:
+      # config.docker.yaml is the ready-to-use sample config shipped with this
+      # repository. Copy it alongside this docker-compose.yaml file before
+      # running `docker compose up`. Edit it to set your sidecar address and
+      # any credentials. The file is mounted read-only inside the container.
+      - ./config.docker.yaml:/home/explorer/config.yaml:ro
+    environment:
+      - EXPLORER_CONFIG_PATH=/home/explorer/config.yaml
+      - BACKEND_URL=http://localhost:8080
+      - NEXT_PUBLIC_BACKEND_DISPLAY_URL=${NEXT_PUBLIC_BACKEND_DISPLAY_URL:-http://localhost:8080}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --spider http://localhost:8080/healthz && wget --quiet --tries=1 --spider http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 6
-      start_period: 10s
+      start_period: 15s
     deploy:
       resources:
         limits:
           cpus: '2'
-          memory: 1G
+          memory: 1.5G
         reservations:
-          cpus: '0.5'
-          memory: 512M
-
-  ui:
-    build:
-      context: ./ui
-      dockerfile: Dockerfile
-      args:
-        - BACKEND_URL=http://explorer:8080
-    container_name: fabric-explorer-ui
-    depends_on:
-      explorer:
-        condition: service_healthy
-    ports:
-      - "${UI_PORT:-3000}:3000"
-    environment:
-      - NEXT_PUBLIC_BACKEND_DISPLAY_URL=${NEXT_PUBLIC_BACKEND_DISPLAY_URL:-http://localhost:8080}
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+          cpus: '0.75'
+          memory: 768M
 
 volumes:
   postgres_data:

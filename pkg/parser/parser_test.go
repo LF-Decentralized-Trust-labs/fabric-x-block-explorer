@@ -458,7 +458,7 @@ func buildBlock(t *testing.T, spec blockSpec) *common.Block {
 
 	filter := make([]byte, len(spec.statuses))
 	for i, s := range spec.statuses {
-		filter[i] = byte(s)
+		filter[i] = byte(s) //nolint:gosec // G115: overflow impossible
 	}
 
 	return &common.Block{
