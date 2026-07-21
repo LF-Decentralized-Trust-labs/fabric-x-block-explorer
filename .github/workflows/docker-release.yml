@@ -52,22 +52,15 @@ jobs:
           echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
           echo "REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-          # Read the canonical version from the VERSION file.
-          VERSION="$(cat VERSION | tr -d '[:space:]')"
-
           if [[ "${GITHUB_REF}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
             # ── Tagged release ────────────────────────────────────────────────
-            # Extra guard: the tag must match the VERSION file exactly.
-            TAG_VERSION="${BASH_REMATCH[1]}"
-            if [[ "${TAG_VERSION}" != "${VERSION}" ]]; then
-              echo "❌ Tag v${TAG_VERSION} does not match VERSION file (${VERSION})"
-              echo "   Update VERSION to ${TAG_VERSION} before tagging."
-              exit 1
-            fi
-            echo "✅ Tag matches VERSION file: ${VERSION}"
+            # Strip the leading "v" from the git tag — this is the canonical version.
+            VERSION="${BASH_REMATCH[1]}"
+            echo "✅ Tag-derived version: ${VERSION}"
           else
-            # ── Merge to main ─────────────────────────────────────────────────
-            echo "✅ Build from VERSION file: ${VERSION}"
+            # ── Non-tag push (e.g. branch) ────────────────────────────────────
+            VERSION="$(git describe --tags --always --dirty | sed 's/^v//')"
+            echo "✅ git-describe version: ${VERSION}"
           fi
 
           # Both triggers publish :<version> and :latest.
