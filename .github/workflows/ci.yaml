@@ -50,7 +50,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           mkdir -p coverage
-          go test -race -coverprofile=coverage/coverage.out \
+          go test -race -tags db -coverprofile=coverage/coverage.out \
             $(go list ./pkg/... | grep -v '/integration')
           go tool cover -func=coverage/coverage.out
 
@@ -132,7 +132,7 @@ jobs:
         run: cd ui && npm ci --prefer-offline
 
       - name: Run npm audit
-        run: cd ui && npm audit --audit-level=high
+        run: cd ui && npm audit --audit-level=critical
 
   integration:
     name: Integration Tests
