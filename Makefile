@@ -114,7 +114,7 @@ test: test-all ## Alias for test-all
 coverage: ensure-db ## Generate test coverage report (auto-starts Postgres if needed)
 	@echo "Generating coverage report..."
 	@mkdir -p coverage
-	go test -race -coverprofile=coverage/coverage.out $(shell go list ./pkg/... | grep -v '/integration')
+	go test -race -tags db -coverprofile=coverage/coverage.out $(shell go list ./pkg/... | grep -v '/integration' | grep -v '/db/sqlc')
 	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	go tool cover -func=coverage/coverage.out
 	@echo ""

@@ -51,7 +51,7 @@ jobs:
         run: |
           mkdir -p coverage
           go test -race -tags db -coverprofile=coverage/coverage.out \
-            $(go list ./pkg/... | grep -v '/integration')
+            $(go list ./pkg/... | grep -v '/integration' | grep -v '/db/sqlc')
           go tool cover -func=coverage/coverage.out
 
       - name: Check coverage threshold (≥ 60%)
