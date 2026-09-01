@@ -47,8 +47,26 @@ jobs:
       - name: Start PostgreSQL
         run: make start-db
 
-      - name: Run tests
-        run: make test-all
+      - name: Run tests with coverage
+        run: |
+          mkdir -p coverage
+          go test -race -coverprofile=coverage/coverage.out \
+            $(go list ./pkg/... | grep -v '/integration')
+          go tool cover -func=coverage/coverage.out
+
+      - name: Check coverage threshold (≥ 60%)
+        run: |
+          go tool cover -func=coverage/coverage.out | \
+            awk '/^total:/ { pct = $3+0; if (pct < 60) { printf "Coverage %.1f%% < 60%% threshold\n", pct; exit 1 } else { printf "✅ Coverage %.1f%%\n", pct } }'
+
+      - name: Generate HTML coverage report
+        run: go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/coverage.html
 
   check-sqlc-generation:
     name: Validate SQLC Generated Code
@@ -73,6 +91,48 @@ jobs:
 
       - name: Check generated SQLC code is up to date
         run: make check-sqlc
+
+  ui-test:
+    name: UI Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: cd ui && npm ci --prefer-offline
+
+      - name: Run UI tests
+        run: cd ui && npm test
+
+  ui-security:
+    name: UI Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install UI dependencies
+        run: cd ui && npm ci --prefer-offline
+
+      - name: Run npm audit
+        run: cd ui && npm audit --audit-level=high
 
   integration:
     name: Integration Tests
@@ -113,3 +173,48 @@ jobs:
       - name: Run integration tests
         if: steps.check_image.outputs.available == 'true'
         run: make test-integration
+
+  perf-smoke:
+    name: Performance Smoke
+    # Only run on push to main to keep PR CI fast.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, integration]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34  # v5.3.0
+        with:
+          go-version: '1.26'
+
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          curl -s https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update && sudo apt-get install -y k6
+
+      - name: Build binary
+        run: make build
+
+      - name: Start live stack
+        run: bash scripts/test-live.sh --keep &
+        env:
+          CI: 'true'
+
+      - name: Wait for REST API
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS http://127.0.0.1:18080/healthz >/dev/null 2>&1 && echo "✅ API ready" && break
+            sleep 2
+          done
+
+      - name: Run smoke load test
+        run: k6 run --env BASE_URL=http://127.0.0.1:18080 scripts/load-test/smoke.js
+
+      - name: Stop live stack
+        if: always()
+        run: bash scripts/test-live.sh --down

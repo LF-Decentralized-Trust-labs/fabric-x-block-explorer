@@ -84,5 +84,8 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 # UI proxy target — both processes share the container network namespace.
 ENV BACKEND_URL=http://localhost:8080
+# Emit structured JSON logs so aggregators (Datadog, Loki, CloudWatch) can parse them.
+ENV FABRIC_LOGGING_FORMAT=json
+ENV FABRIC_LOGGING_SPEC=INFO
 
 ENTRYPOINT ["/app/start.sh"]

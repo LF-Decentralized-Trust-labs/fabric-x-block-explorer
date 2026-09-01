@@ -12,9 +12,36 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/hyperledger/fabric-lib-go/common/flogging"
+
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/api"
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 )
+
+var cliLogger = flogging.MustGetLogger("cli")
+
+// knownWeakPasswords is a set of well-known default passwords operators
+// frequently forget to change before going to production.
+var knownWeakPasswords = map[string]struct{}{
+	"":         {},
+	"postgres": {},
+	"password": {},
+	"changeme": {},
+	"secret":   {},
+	"admin":    {},
+	"1234":     {},
+	"12345678": {},
+}
+
+// warnWeakSecrets logs a warning when the database password is a known weak
+// default. It is not an error — the service still starts — but the message is
+// hard to miss in logs so operators notice before going live.
+func warnWeakSecrets(cfg *config.Config) {
+	if _, weak := knownWeakPasswords[cfg.DB.Password]; weak {
+		cliLogger.Warn("⚠️  database.password is a well-known default value — " +
+			"change it before deploying to production")
+	}
+}
 
 const explorerName = "Block Explorer"
 
@@ -60,6 +87,7 @@ func StartExplorerCMD(use string) *cobra.Command {
 			if err := cfg.Validate(); err != nil {
 				return err
 			}
+			warnWeakSecrets(cfg)
 			cmd.SilenceUsage = true
 			cmd.Printf("Starting %s\n", explorerName)
 			defer cmd.Printf("%s ended\n", explorerName)
