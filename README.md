@@ -58,7 +58,7 @@ One combined image is published to the **GitHub Container Registry (GHCR)** on e
 
 | Image | Registry | Tags | Contents | Platforms |
 |---|---|---|---|---|
-| `fabric-x-block-explorer` | `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Go backend (:8080) + Next.js UI (:3000) | `linux/amd64`, `linux/arm64` |
+| `fabric-x-block-explorer` | `ghcr.io/lf-decentralized-trust-labs` | `:<version>` `:latest` | Go backend (:8080) + Next.js UI (:3000) | `linux/amd64`, `linux/arm64`, `linux/s390x` |
 
 The database uses the official `postgres:16-alpine` image — the project does
 not ship a custom database image.
@@ -93,7 +93,7 @@ including potentially breaking changes.
 2. Open and merge a PR with that change.
 3. Create and push a Git tag matching the version: `git tag v0.2.0 && git push origin v0.2.0`.
 4. The [`docker-release`](.github/workflows/docker-release.yml) workflow triggers on the tag,
-   cross-compiles the Go binary for `linux/amd64`, `linux/arm64` via
+   cross-compiles the Go binary for `linux/amd64`, `linux/arm64`, `linux/s390x` via
    `make build-release`, then builds and pushes the combined image tagged `:<version>` and `:latest`
    to GHCR.
 
@@ -395,7 +395,7 @@ make dev-down          # 🛑 Tear down everything started by make dev
 
 # ── Building ─────────────────────────────────────────────────────
 make build             # Build ./bin/explorer
-make build-release     # Cross-compile for linux/amd64, linux/arm64 (used by CI release)
+make build-release     # Cross-compile for linux/amd64, linux/arm64, linux/s390x (used by CI release)
 
 # ── Testing ──────────────────────────────────────────────────────
 make test-no-db        # Tests that don't need a database
