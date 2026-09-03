@@ -30,13 +30,18 @@ type Service struct {
 	config  *config.Config
 	querier dbsqlc.Querier
 	ready   *channel.Ready
+	pool    *pgxpool.Pool // held for /readyz DB ping
+	readyz  *readyzState  // pipeline freshness tracker
+	metrics *Metrics      // Prometheus instruments
 }
 
 // New creates a new explorer Service.
 func New(cfg *config.Config) *Service {
 	return &Service{
-		config: cfg,
-		ready:  channel.NewReady(),
+		config:  cfg,
+		ready:   channel.NewReady(),
+		readyz:  &readyzState{},
+		metrics: NewMetrics(),
 	}
 }
 
@@ -67,6 +72,7 @@ func (s *Service) Run(ctx context.Context) error {
 		return err
 	}
 
+	s.pool = pool
 	s.querier = dbsqlc.New(pool)
 
 	// Compute the resume block: start from MAX(block_num)+1 when the DB already

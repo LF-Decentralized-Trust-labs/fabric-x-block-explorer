@@ -64,14 +64,16 @@ lint: ## Run golangci-lint
 	golangci-lint run ./...
 	@echo "✅ Lint passed"
 
-test-no-db: ## Run tests that do not require a database (parser, types, util, config, pipeline)
+test-no-db: ## Run tests that do not require a database (parser, types, util, config, pipeline, api, cli)
 	@echo "Running tests without database requirement..."
 	go test -race -v -count=1 \
 		./pkg/parser/... \
 		./pkg/util/... \
 		./pkg/config/... \
 		./pkg/blockpipeline/... \
-		./pkg/sidecarstream/...
+		./pkg/sidecarstream/... \
+		./pkg/api/... \
+		./pkg/cli/...
 
 start-db: ## Start a local PostgreSQL container for DB tests
 	@go mod download $(COMMITTER_MODULE)
@@ -102,17 +104,17 @@ stop-db: ## Stop and remove the local PostgreSQL container
 
 test-requires-db: ensure-db ## Run DB tests (auto-starts Postgres if needed)
 	@echo "Running tests with database..."
-	go test -race -v -count=1 ./pkg/db/...
+	go test -race -v -count=1 -tags db ./pkg/db/... ./pkg/api/...
 
 test-all: ensure-db ## Run all unit tests (auto-starts Postgres if needed)
 	@echo "Running all unit tests..."
-	go test -race -v -count=1 $(shell go list ./pkg/... | grep -v '/integration')
+	go test -race -v -count=1 -tags db $(shell go list ./pkg/... | grep -v '/integration')
 test: test-all ## Alias for test-all
 
 coverage: ensure-db ## Generate test coverage report (auto-starts Postgres if needed)
 	@echo "Generating coverage report..."
 	@mkdir -p coverage
-	go test -race -coverprofile=coverage/coverage.out $(shell go list ./pkg/... | grep -v '/integration')
+	go test -race -tags db -coverprofile=coverage/coverage.out $(shell go list ./pkg/... | grep -v '/integration' | grep -v '/db/sqlc')
 	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
 	go tool cover -func=coverage/coverage.out
 	@echo ""
@@ -254,6 +256,15 @@ ui-build: ## Build the UI for production
 
 ui-lint: ## Lint the UI source
 	cd ui && npm run lint
+
+ui-test: ## Run UI unit tests (requires node_modules — run ui-install first)
+	cd ui && npm test
+
+load-test-smoke: ## Quick 30s k6 smoke test (requires live stack on :18080)
+	k6 run --env BASE_URL=http://127.0.0.1:18080 scripts/load-test/smoke.js
+
+load-test-load: ## Sustained 5-min load test (requires live stack on :18080)
+	k6 run --env BASE_URL=http://127.0.0.1:18080 scripts/load-test/load.js
 
 dev: ## 🚀 One-command local E2E: build binary, start committer test node + postgres + explorer, install UI deps, launch UI dev server
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -1,0 +1,317 @@
+---
+name: fabric-x-explorer-dev
+description: >
+  Use when working in the fabric-x-block-explorer repository — reviewing code changes,
+  understanding architecture, writing or testing new handlers, checking patterns, or
+  onboarding to the codebase. Covers Go API patterns, testing conventions, linter rules,
+  DB layer, UI layer, and CI requirements.
+---
+
+# Fabric-X Block Explorer — Developer Skill
+
+This skill activates whenever someone asks about code review, testing, architecture,
+or development patterns inside this repository. Follow the sections below that match
+the task at hand.
+
+---
+
+## 1. Architecture in one paragraph
+
+The explorer streams Hyperledger Fabric blocks from a **fabric-x-committer sidecar**
+(gRPC) → **blockpipeline** (parse → write) → **PostgreSQL** (sqlc-generated queries)
+→ **REST API** (`pkg/api`). The Next.js UI in `ui/` proxies all REST calls through
+`/api` (Next.js route handlers) to avoid CORS and Docker DNS issues. The runtime
+backend URL is served by `GET /api/config` so it is not baked into the Docker image.
+
+Key data-flow files:
+- [`pkg/sidecarstream/streamer.go`](pkg/sidecarstream/streamer.go) — gRPC stream
+- [`pkg/blockpipeline/`](pkg/blockpipeline/) — receiver → processor → writer goroutines
+- [`pkg/db/db_writer.go`](pkg/db/db_writer.go) — batch INSERT with `ON CONFLICT DO NOTHING`
+- [`pkg/api/rest.go`](pkg/api/rest.go) — all REST handlers
+- [`pkg/api/service.go`](pkg/api/service.go) — service lifecycle, `resumeBlockNum`
+- [`ui/lib/api.ts`](ui/lib/api.ts) — typed REST client
+
+---
+
+## 2. Before reviewing or writing any code — read these first
+
+Always read the relevant source file before making claims. Key files:
+
+| Changing | Read first |
+|---|---|
+| REST handler | [`pkg/api/rest.go`](pkg/api/rest.go), [`pkg/api/service.go`](pkg/api/service.go) |
+| Config field | [`pkg/config/config.go`](pkg/config/config.go), [`pkg/config/defaults.go`](pkg/config/defaults.go) |
+| /readyz or /metrics | [`pkg/api/readyz.go`](pkg/api/readyz.go), [`pkg/api/metrics.go`](pkg/api/metrics.go) |
+| DB query | [`pkg/db/sqlc/querier.go`](pkg/db/sqlc/querier.go), `pkg/db/queries/*.sql` |
+| Migrations | `pkg/db/migrations/*.sql` (auto-embedded, auto-applied), `pkg/db/migrations_down/` (manual only) |
+| UI | [`ui/lib/api.ts`](ui/lib/api.ts), [`ui/app/api/config/route.ts`](ui/app/api/config/route.ts) |
+| Tests | [`pkg/api/rest_test.go`](pkg/api/rest_test.go), [`pkg/api/coverage_test.go`](pkg/api/coverage_test.go) |
+| Linter rules | [`.golangci.yml`](.golangci.yml) |
+
+---
+
+## 3. Code review checklist
+
+Work through each section that applies to the change.
+
+### 3a. Every Go change
+- [ ] **License header** present (`Copyright IBM Corp. All Rights Reserved. / SPDX-License-Identifier: Apache-2.0`)
+- [ ] **Import groups** follow the 4-group rule (see §6)
+- [ ] **Line length** ≤ 120 chars — split long lines with trailing comma style:
+  ```go
+  svc := newTestService(t,
+      stubQuerier{listBlocksRows: rows},
+      config.RESTConfig{MaxListLimit: 100},
+  )
+  ```
+- [ ] **`any` not `interface{}`** — revive `use-any` is enabled
+- [ ] **≤ 4 function parameters** — split into a struct or helper if exceeded
+- [ ] **Receiver name** is not `_` and not unused (revive `unused-receiver` — omit receiver name entirely with `func (MyType) Method(...)` if the receiver body doesn't use it)
+- [ ] **No `github.com/pkg/errors`** — use `github.com/cockroachdb/errors`
+- [ ] **gofumpt alignment** — map/struct literals must not have extra spacing for alignment
+
+### 3b. New REST handler
+- [ ] Handler signature: `func (s *Service) handleXxx(w http.ResponseWriter, r *http.Request)`
+- [ ] Path params: use `pathInt64(r, "key")` — returns `(int64, error)`, call `respondError` on error
+- [ ] Query params: use `queryOptionalInt32` / `queryOptionalInt64` — return error on bad input
+- [ ] Limit cap: call `s.maxListLimit()` and compare; return `newValidationError("limit must be <= %d", max)` if exceeded
+- [ ] DB errors: pipe through `respondError(w, err)` — it maps `pgx.ErrNoRows` → 404, `context.Canceled` → 499, validation → 400, rest → 500
+- [ ] Response: use `respondJSON(w, payload)` — sets Content-Type and marshals
+- [ ] Route registered in `newRESTRouter()` in [`rest.go`](pkg/api/rest.go)
+
+### 3c. New config field
+- [ ] Field added to the right struct in [`config.go`](pkg/config/config.go) with `yaml` and `mapstructure` tags
+- [ ] Default constant `DefaultXxx` added in [`defaults.go`](pkg/config/defaults.go)
+- [ ] `v.SetDefault("key", DefaultXxx)` added in `newViperWithDefaults()`
+- [ ] Validation (if required) added in `Validate()` or the relevant `validate()` method
+- [ ] Both `config.local.yaml` and `config.docker.yaml` updated with a commented example
+- [ ] Test in [`pkg/config/config_test.go`](pkg/config/config_test.go) covers the new field in the defaults and YAML-parsing subtests
+
+### 3d. DB changes
+- [ ] **Never edit `pkg/db/sqlc/*.go`** — these are auto-generated by sqlc; edit the `.sql` files in `pkg/db/queries/` and regenerate with `make check-sqlc` / `sqlc generate`
+- [ ] All new SQL INSERT statements use `ON CONFLICT DO NOTHING` for idempotency
+- [ ] New migrations go in `pkg/db/migrations/` with sequential numbering (`002_...sql`); they are auto-applied on startup
+- [ ] Rollback SQL goes in `pkg/db/migrations_down/` — **never** in `migrations/` (the embedded glob runs everything in that folder)
+- [ ] Migration changes require a corresponding rollback file
+
+### 3e. Tests
+See §4 for full test-writing guide.
+- [ ] New handler has at least: happy-path, DB-error-returns-500, context-cancelled-returns-499 subtests
+- [ ] Test uses `t.Parallel()` at both `Test*` and subtest level
+- [ ] `stubQuerier` is used — not a real DB (no-DB tests must stay runnable without Postgres)
+- [ ] DB-dependent tests (`resumeBlockNum`, etc.) carry `//go:build db` tag and live in `*_test.go` files that also have the tag
+- [ ] Coverage stays ≥ 60% — run `make coverage` to check
+
+---
+
+## 4. Writing tests
+
+### Test anatomy
+```go
+func TestHandleMyEndpoint(t *testing.T) {
+    t.Parallel()
+
+    t.Run("happy_path_200", func(t *testing.T) {
+        t.Parallel()
+        svc := newTestService(t,
+            stubQuerier{myRow: dbsqlc.MyRow{...}},
+            config.RESTConfig{MaxListLimit: 100},
+        )
+        rr := doRequest(t, svc.newRESTRouter(), "/my/endpoint")
+        require.Equal(t, http.StatusOK, rr.Code)
+        var body MyResponse
+        require.NoError(t, json.NewDecoder(rr.Body).Decode(&body))
+        assert.Equal(t, "expected", body.Field)
+    })
+
+    t.Run("db_error_returns_500", func(t *testing.T) {
+        t.Parallel()
+        svc := newTestService(t,
+            stubQuerier{myErr: errors.New("db down")},
+            config.RESTConfig{},
+        )
+        rr := doRequest(t, svc.newRESTRouter(), "/my/endpoint")
+        assert.Equal(t, http.StatusInternalServerError, rr.Code)
+    })
+
+    t.Run("context_cancelled_returns_499", func(t *testing.T) {
+        t.Parallel()
+        svc := newTestService(t,
+            stubQuerier{myErr: context.Canceled},
+            config.RESTConfig{},
+        )
+        rr := doRequest(t, svc.newRESTRouter(), "/my/endpoint")
+        assert.Equal(t, 499, rr.Code)
+    })
+}
+```
+
+### Extending stubQuerier
+Add fields and methods to `stubQuerier` in [`rest_test.go`](pkg/api/rest_test.go):
+```go
+type stubQuerier struct {
+    dbsqlc.Querier        // embed — unimplemented methods panic if called
+    myRow    dbsqlc.MyRow
+    myErr    error
+    // ...existing fields...
+}
+
+// Implement only the method your handler calls:
+func (s stubQuerier) GetMyThing(
+    _ context.Context, _ int64,
+) (dbsqlc.MyRow, error) {
+    return s.myRow, s.myErr
+}
+```
+
+Rules for stub methods:
+- Omit receiver name entirely (`func (stubQuerier) Method(...)`) when the body doesn't use it — satisfies both revive `unused-receiver` and staticcheck `ST1006`
+- Keep return types matching the sqlc-generated interface exactly
+
+### Test helpers available
+| Helper | Signature | When to use |
+|---|---|---|
+| `newTestService` | `(t, querier, restCfg) *Service` | Every handler test |
+| `doRequest` | `(t, handler, target) *ResponseRecorder` | All GET requests |
+| `doRequestWithOrigin` | `(t, handler, method, origin) *ResponseRecorder` | CORS tests |
+| `doRequestWithMethod` | `(t, handler, method, target) *ResponseRecorder` | Non-GET requests / swagger |
+
+### Running tests
+```bash
+# Fast — no DB required (CI default for unit tests)
+make test-no-db
+
+# With DB (starts Postgres automatically)
+make test-requires-db
+
+# All tests including DB tests
+make test-all
+
+# Coverage report
+make coverage
+# Check gate manually:
+go tool cover -func=coverage/coverage.out | grep "^total:"
+```
+
+---
+
+## 5. Linter — zero issues required before merge
+
+Run locally before pushing:
+```bash
+golangci-lint run ./...
+```
+
+The most common violations and fixes:
+
+| Violation | Fix |
+|---|---|
+| `goimports: File is not properly formatted` | Run `goimports -w <file>` then `gofumpt -w <file>` — check import group order (§6) |
+| `gofumpt: File is not properly formatted` | Run `gofumpt -w <file>` — usually extra blank lines or map alignment |
+| `revive: line-length-limit` | Wrap the line using trailing-comma style |
+| `revive: argument-limit` | Introduce a config/options struct, or split into helper functions |
+| `revive: use-any` | Replace `interface{}` with `any` |
+| `revive: unused-receiver` | Omit the receiver name: `func (MyType) Method(...)` |
+| `unparam: always receives X` | Remove the param and inline the constant, or rename the function |
+| `nolintlint: directive unused` | Remove the `//nolint:` comment — the linter it silenced no longer fires |
+| `goheader` missing | Add the 2-line copyright block at the top of every `.go` file |
+
+---
+
+## 6. Import group order (enforced by goimports)
+
+```go
+import (
+    // 1. Standard library
+    "context"
+    "encoding/json"
+
+    // 2. Third-party external
+    "github.com/cockroachdb/errors"
+    "github.com/jackc/pgx/v5"
+
+    // 3. Hyperledger (local-prefix 1)
+    "github.com/hyperledger/fabric-lib-go/common/flogging"
+    "github.com/hyperledger/fabric-protos-go-apiv2/peer"
+
+    // 4. This project (local-prefix 2)
+    "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
+    dbsqlc "github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/db/sqlc"
+)
+```
+
+Both `github.com/hyperledger/*` and `github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/*`
+are `local-prefixes` in `.golangci.yml` — they each get their own group.
+
+---
+
+## 7. Error handling quick reference
+
+```
+pgx.ErrNoRows                     → 404  {"error":"not found"}
+context.Canceled / DeadlineExceeded → 499  {"error":"request cancelled"}
+newValidationError("msg")          → 400  {"error":"msg"}
+any other error                    → 500  {"error":"internal server error"} + log
+```
+
+Always use `respondError(w, err)` — never write status codes directly in handlers.
+Use `newValidationError(format, args...)` for user-facing bad-input messages.
+
+---
+
+## 8. Understanding the readyz and metrics endpoints
+
+### /readyz
+Implemented in [`pkg/api/readyz.go`](pkg/api/readyz.go):
+- Returns **200 ready** when: no threshold configured, or last block was within `StaleBlockThreshold`
+- Returns **503 degraded** with `reason: pipeline_stalled` when no block has been seen within the threshold
+- First-start grace: if no block has ever been ingested (`lastBlockAt == 0`), always returns ready
+- `readyzState.RecordBlock()` is called by the block writer after each successful DB write
+
+### /metrics
+Implemented in [`pkg/api/metrics.go`](pkg/api/metrics.go):
+- Uses a **private Prometheus registry** — tests don't pollute the global registry
+- Instruments: `explorer_block_height_current` (gauge), `explorer_blocks_ingested_total` (counter), `explorer_http_requests_total` (counter vec), `explorer_http_request_duration_seconds` (histogram vec)
+- Endpoint enabled only when `server.rest.metrics_enabled: true` in config; returns 404 otherwise
+
+---
+
+## 9. Typical PR description template
+
+When writing or reviewing a PR, ensure the description includes:
+
+```
+## What
+<one-sentence summary>
+
+## Why
+<problem being solved or feature being added>
+
+## Changes
+- pkg/api/rest.go: <what changed>
+- pkg/config/config.go: <new field>
+- pkg/api/rest_test.go: <new tests>
+
+## Testing
+- [ ] `make test-no-db` passes
+- [ ] `golangci-lint run ./...` returns 0 issues
+- [ ] Coverage ≥ 60% (`make coverage`)
+- [ ] Manually tested against local stack (`make live-local`)
+```
+
+---
+
+## 10. Onboarding: understanding the full request lifecycle
+
+Trace a GET `/blocks?limit=10` request end-to-end:
+
+1. **Router** ([`newRESTRouter`](pkg/api/rest.go)) — matches `/blocks`, calls `handleListBlocks`
+2. **Middleware chain** — `loggingMiddleware` (wraps ResponseWriter, logs after), `corsMiddleware` (sets ACAO header)
+3. **`handleListBlocks`** — parses `limit`, `from`, `to`, `offset` query params via `queryOptionalInt32/64`
+4. **Limit cap** — `s.maxListLimit()` returns config value or `DefaultMaxListLimit`(500); returns 400 if exceeded
+5. **DB query** — `s.querier.ListBlocks(ctx, params)` — uses sqlc-generated code backed by `pkg/db/sqlc/`
+6. **Error dispatch** — `respondError(w, err)` maps error type to status code
+7. **Response** — `respondJSON(w, ListBlocksResponse{Blocks: blocks, Total: height})` marshals and writes
+8. **Logging** — deferred in `loggingMiddleware`: logs `GET /blocks 200 1.2ms`
+
+To add a new query parameter to this handler, follow the pattern of `queryOptionalInt32` at the top of `handleListBlocks` in [`rest.go`](pkg/api/rest.go).

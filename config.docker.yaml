@@ -46,3 +46,6 @@ server:
       port: 8080
     read_header_timeout: 10s
     default_tx_limit: 50
+    # max_list_limit: 500      # hard cap on ?limit / ?tx_limit (default: 500)
+    # cors_allowed_origins:    # restrict CORS in production to your UI origin
+    #   - "http://localhost:3000"
