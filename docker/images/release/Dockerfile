@@ -20,7 +20,7 @@
 ###########################################
 # Stage 1: Build the Next.js UI
 ###########################################
-FROM --platform=$BUILDPLATFORM node:22-slim AS ui-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS ui-builder
 
 WORKDIR /app
 
@@ -33,7 +33,7 @@ RUN npm run build
 ###########################################
 # Stage 2: Production runtime image
 ###########################################
-FROM node:22-slim AS runner
+FROM node:22-alpine AS runner
 
 ARG TARGETARCH
 
@@ -42,13 +42,12 @@ ARG VERSION=1.0
 ARG CREATED
 ARG REVISION=1.0
 
-# ── Install wget for healthchecks (mirrors what the existing backend image uses) ──
-RUN apt-get update && apt-get install -y --no-install-recommends wget && rm -rf /var/lib/apt/lists/*
+# ── Install wget for healthchecks ──────────────────────────────────────────────
+RUN apk add --no-cache wget
 
 # ── Non-root user ──────────────────────────────────────────────────────────────
 # uid 10001 matches the fabric-x-committer / existing release image convention.
-RUN useradd -u 10001 -r -g root -s /sbin/nologin \
-        -c "Hyperledger Fabric-X explorer user" explorer && \
+RUN adduser -u 10001 -D -g "" -s /sbin/nologin explorer && \
     mkdir -p /home/explorer && \
     chown -R 10001:0 /home/explorer && \
     chmod 0755 /home/explorer
