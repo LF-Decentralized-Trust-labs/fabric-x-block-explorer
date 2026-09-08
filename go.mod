@@ -2,6 +2,8 @@ module github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer
 
 go 1.23.0
 
+toolchain go1.23.0
+
 require (
 	github.com/cockroachdb/errors v1.13.0
 	github.com/hyperledger/fabric-lib-go v1.1.5-0.20260607181445-fc4b05c5d38f
