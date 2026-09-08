@@ -26,20 +26,23 @@ CLI_PKG            := github.com/LF-Decentralized-Trust-labs/fabric-x-block-expl
 LD_FLAGS           := -ldflags "-X $(CLI_PKG).Version=$(VERSION)"
 RELEASE_DIR        := release
 RELEASE_ARCHES     := amd64 arm64 s390x
+RELEASE_DOCKERFILE := docker/images/release/Dockerfile
 
 build: ## Build the explorer binary with version injection
 	@mkdir -p bin
 	go build $(LD_FLAGS) -o $(BINARY) ./cmd/explorer/
 	@echo "✅ Built $(BINARY) version=$(VERSION)"
 
-build-release: ## Build release binaries for linux/amd64, linux/arm64 (used by docker-release CI)
-	@for arch in $(RELEASE_ARCHES); do \
-		mkdir -p $(RELEASE_DIR)/linux-$$arch; \
-		echo "Building linux/$$arch..."; \
-		CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -ldflags '-w -s' \
-			-o $(RELEASE_DIR)/linux-$$arch/explorer ./cmd/explorer/; \
-	done
-	@echo "✅ Release binaries built in $(RELEASE_DIR)/"
+build-release: ## Build multi-arch release image using Docker multi-stage (Go build inside Docker, no host Go required)
+	@echo "Building multi-arch release image via Docker buildx..."
+	docker buildx build \
+		--platform linux/amd64,linux/arm64,linux/s390x \
+		--build-arg VERSION=$(VERSION) \
+		-f $(RELEASE_DOCKERFILE) \
+		-t localhost/fabric-x-block-explorer:$(VERSION) \
+		--load \
+		.
+	@echo "✅ Release image built: localhost/fabric-x-block-explorer:$(VERSION)"
 
 sqlc: ## Generate Go code from SQL using sqlc
 	@echo "Generating Go code from SQL files..."
