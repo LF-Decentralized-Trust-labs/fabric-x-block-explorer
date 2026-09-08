@@ -7,9 +7,11 @@
 #
 # Build context: repo root (.)
 #
-# The Go binary is pre-built by CI (make build-release) and copied from the
-# release/ directory — matching the fabric-x-committer convention of keeping
-# the Go toolchain out of the final image.
+# The Go binary is built inside Docker (go-builder stage) so the build is
+# fully self-contained and does not depend on the Go version installed on
+# the CI runner. This matches the pattern used by fabric-x-committer and
+# fabric-x-orderer, and avoids failures caused by go.mod toolchain
+# directives referencing unreleased Go versions in indirect dependencies.
 #
 # The Next.js UI is built inside Docker from ui/ source (node builder stage).
 #
@@ -18,7 +20,26 @@
 #   - Next.js UI  on :3000 (proxies /api/* to the backend)
 
 ###########################################
-# Stage 1: Build the Next.js UI
+# Stage 1: Build the Go backend binary
+###########################################
+FROM --platform=$BUILDPLATFORM golang:1.24 AS go-builder
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+ARG TARGETARCH
+ARG TARGETOS=linux
+ARG VERSION=dev
+
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "-w -s -X github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/cli.Version=${VERSION}" \
+    -o /out/explorer ./cmd/explorer/
+
+###########################################
+# Stage 2: Build the Next.js UI
 ###########################################
 FROM --platform=$BUILDPLATFORM node:22-alpine AS ui-builder
 
@@ -31,16 +52,14 @@ COPY ui/ .
 RUN npm run build
 
 ###########################################
-# Stage 2: Production runtime image
+# Stage 3: Production runtime image
 ###########################################
 FROM node:22-alpine AS runner
 
-ARG TARGETARCH
-
 # Label args
-ARG VERSION=1.0
+ARG VERSION=dev
 ARG CREATED
-ARG REVISION=1.0
+ARG REVISION=dev
 
 # ── Install wget for healthchecks ──────────────────────────────────────────────
 RUN apk add --no-cache wget
@@ -52,8 +71,8 @@ RUN adduser -u 10001 -D -g "" -s /sbin/nologin explorer && \
     chown -R 10001:0 /home/explorer && \
     chmod 0755 /home/explorer
 
-# ── Go backend binary (pre-built by CI via make build-release) ─────────────────
-COPY release/linux-${TARGETARCH}/explorer /bin/explorer
+# ── Go backend binary (built in go-builder stage) ─────────────────────────────
+COPY --from=go-builder /out/explorer /bin/explorer
 
 # ── Next.js standalone output ──────────────────────────────────────────────────
 COPY --from=ui-builder --chown=10001:0 /app/.next/standalone /app/
