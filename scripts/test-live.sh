@@ -5,8 +5,7 @@
 # test-live.sh — Spin up committer-test-node + explorer Postgres, run the
 # explorer binary against them, then smoke-test every REST endpoint.
 #
-# The committer-test-node v1.0.3 uses a custom loadgen config (scripts/loadgen-config.yaml)
-# that generates transactions with metadata and all write types (read-only, read-write, blind-write).
+# The committer-test-node uses the current loadgen schema in scripts/loadgen-config.yaml.
 #
 # Usage:
 #   ./scripts/test-live.sh                # run everything
@@ -25,7 +24,10 @@ EXPLORER_PID_FILE="/tmp/fx-explorer-live.pid"
 EXPLORER_LOG="/tmp/fx-explorer-live.log"
 CFG_FILE="/tmp/fx-explorer-live.yaml"
 
-COMMITTER_IMAGE="hyperledger/fabric-x-committer-test-node:1.0.3"
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+COMMITTER_MODULE="github.com/hyperledger/fabric-x-committer"
+COMMITTER_VERSION="$(cd "$PROJECT_ROOT" && go list -m -f '{{.Version}}' "$COMMITTER_MODULE")"
+COMMITTER_IMAGE="docker.io/hyperledger/committer-test-node:${COMMITTER_VERSION}"
 POSTGRES_IMAGE="postgres:16-alpine"
 
 PG_HOST_PORT=15432
@@ -248,14 +250,8 @@ wait_http "${EXPLORER_URL}/blocks/height" 120 || die "Explorer REST not ready"
 # 8. Wait for at least 1 application block (height > 0)
 HEIGHT=$(wait_height_gt0 300) || die "No application blocks arrived"
 
-# Note: In v1.0.3, loadgen configuration is done via the config file (loadgen-config.yaml)
-# which is mounted into the container. The loadgen will generate transactions with:
-# - 256 bytes of metadata per transaction
-# - 2-5 read-only operations per transaction
-# - 2-5 read-write operations per transaction
-# - 1-3 blind-write operations per transaction
-# The loadgen will generate up to 50,000 transactions as configured in the limit section.
-log "Loadgen is configured to generate transactions with metadata and all write types"
+# Loadgen configuration is provided by the mounted config file.
+log "Loadgen is configured according to loadgen-config.yaml"
 log "Waiting for transactions to be generated and ingested..."
 sleep 5
 
