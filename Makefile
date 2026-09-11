@@ -79,19 +79,19 @@ start-db: ## Start a local PostgreSQL container for DB tests
 	@chmod +x $(COMMITTER_SCRIPTS)/db-version.sh $(COMMITTER_SCRIPTS)/get-and-start-postgres.sh
 	@cd $(COMMITTER_SRC) && bash scripts/get-and-start-postgres.sh
 	@echo "Waiting for Postgres to be ready..."
-	@until docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q; do sleep 1; done
+	@until docker exec $(DB_CONTAINER_NAME) pg_isready -U postgres -q; do sleep 1; done
 	@echo "✅ Postgres is ready on localhost:$(DB_PORT)"
 
 ensure-db: ## Ensure the test DB container is running and explorer DB exists; starts/creates if needed
-	@if docker exec $(DB_CONTAINER_NAME) pg_isready -U yugabyte -q 2>/dev/null; then \
+	@if docker exec $(DB_CONTAINER_NAME) pg_isready -U postgres -q 2>/dev/null; then \
 		echo "✅ Postgres already running on localhost:$(DB_PORT)"; \
 	else \
 		echo "⚡ Postgres not running — starting it now..."; \
 		$(MAKE) start-db; \
 	fi
-	@if ! docker exec $(DB_CONTAINER_NAME) psql -U yugabyte -lqt 2>/dev/null | cut -d\| -f1 | grep -qw explorer; then \
+	@if ! docker exec $(DB_CONTAINER_NAME) psql -U postgres -lqt 2>/dev/null | cut -d\| -f1 | grep -qw explorer; then \
 		echo "⚡ 'explorer' database missing — creating it..."; \
-		docker exec $(DB_CONTAINER_NAME) psql -U yugabyte -c "CREATE DATABASE explorer;" > /dev/null; \
+		docker exec $(DB_CONTAINER_NAME) psql -U postgres -c "CREATE DATABASE explorer;" > /dev/null; \
 		echo "✅ 'explorer' database created"; \
 	else \
 		echo "✅ 'explorer' database exists"; \

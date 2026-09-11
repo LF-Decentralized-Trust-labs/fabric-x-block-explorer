@@ -281,7 +281,7 @@ func extractChaincodeData(meta *txMeta, pl *common.Payload) {
 	if len(tx.Namespaces) > 0 && tx.Namespaces[0] != nil && tx.Namespaces[0].NsId != "" {
 		meta.chaincodeName = &tx.Namespaces[0].NsId
 	}
-	// Extract transaction metadata (introduced in committer v1.0.3)
+	// Extract transaction metadata.
 	if len(tx.Metadata) > 0 {
 		meta.metadata = tx.Metadata
 	}

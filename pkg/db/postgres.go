@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
-	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
 	retrypkg "github.com/hyperledger/fabric-x-committer/utils/retry"
+	"github.com/hyperledger/fabric-x-committer/utils/statedb"
 
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/config"
 )
@@ -26,7 +26,7 @@ type Config struct {
 	User      string
 	Password  string
 	DBName    string
-	TLS       dbconn.DatabaseTLSConfig
+	TLS       statedb.TLSConfig
 	MaxConns  int32
 	// MaxConnIdleTime is the maximum time a connection may sit idle; 0 uses the default (5m).
 	MaxConnIdleTime time.Duration
@@ -42,7 +42,7 @@ func NewPostgres(ctx context.Context, cfg Config) (*pgxpool.Pool, error) {
 		cfg.MaxConns = config.DefaultDBMaxConns
 	}
 
-	dsn, err := dbconn.DataSourceName(dbconn.DataSourceNameParams{
+	dsn, err := statedb.DataSourceName(statedb.DataSourceNameParams{
 		Username:        cfg.User,
 		Password:        cfg.Password,
 		EndpointsString: connection.AddressString(cfg.Endpoints...),

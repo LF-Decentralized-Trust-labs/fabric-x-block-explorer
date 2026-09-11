@@ -20,6 +20,8 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
 
+const testNamespace = "mycc"
+
 func TestNewBlockWriter(t *testing.T) {
 	t.Parallel()
 	env := NewDatabaseTestEnv(t)
@@ -114,7 +116,7 @@ func TestWriteProcessedBlockTxStorage(t *testing.T) {
 						TxNum: 0, TxID: txID, ValidationCode: 0,
 						Namespaces: []types.TxNamespaceRecord{
 							{
-								NsID: "mycc", NsVersion: 1,
+								NsID: testNamespace, NsVersion: 1,
 								ReadWrites: []types.ReadWriteRecord{
 									{Key: []byte("key1"), ReadVersion: util.Ptr(uint64(10)), Value: []byte("value1")},
 								},
@@ -130,7 +132,7 @@ func TestWriteProcessedBlockTxStorage(t *testing.T) {
 					},
 				},
 				Policies: []types.NamespacePolicyRecord{
-					{Namespace: "mycc", Version: 1, PolicyJSON: json.RawMessage(`{"policy_bytes":"cG9saWN5"}`)},
+					{Namespace: testNamespace, Version: 1, PolicyJSON: json.RawMessage(`{"policy_bytes":"cG9saWN5"}`)},
 				},
 			},
 		}
@@ -271,7 +273,7 @@ func TestWriteProcessedBlockPolicies(t *testing.T) {
 				Transactions: []types.TxRecord{},
 				Policies: []types.NamespacePolicyRecord{
 					{
-						Namespace:  "mycc",
+						Namespace:  testNamespace,
 						Version:    1,
 						PolicyJSON: json.RawMessage(`{"policy_bytes":"base64encodedpolicy"}`),
 					},
@@ -279,10 +281,10 @@ func TestWriteProcessedBlockPolicies(t *testing.T) {
 			},
 		}))
 
-		policies, err := env.Queries.GetNamespacePolicies(ctx, "mycc")
+		policies, err := env.Queries.GetNamespacePolicies(ctx, testNamespace)
 		require.NoError(t, err)
 		assert.Len(t, policies, 1)
-		assert.Equal(t, "mycc", policies[0].Namespace)
+		assert.Equal(t, testNamespace, policies[0].Namespace)
 		assert.Equal(t, int64(1), policies[0].Version)
 
 		// Second block: insert policy version 2 — both versions should exist.
@@ -291,12 +293,12 @@ func TestWriteProcessedBlockPolicies(t *testing.T) {
 			Data: &types.ParsedBlockData{
 				Transactions: []types.TxRecord{},
 				Policies: []types.NamespacePolicyRecord{
-					{Namespace: "mycc", Version: 2, PolicyJSON: json.RawMessage(`{"policy_bytes":"updated"}`)},
+					{Namespace: testNamespace, Version: 2, PolicyJSON: json.RawMessage(`{"policy_bytes":"updated"}`)},
 				},
 			},
 		}))
 
-		policies, err = env.Queries.GetNamespacePolicies(ctx, "mycc")
+		policies, err = env.Queries.GetNamespacePolicies(ctx, testNamespace)
 		require.NoError(t, err)
 		assert.Len(t, policies, 2)
 	})
