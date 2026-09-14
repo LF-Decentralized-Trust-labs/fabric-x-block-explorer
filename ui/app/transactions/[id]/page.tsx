@@ -308,10 +308,7 @@ export default function TransactionDetailPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <dt className="text-sm font-medium text-[#858585]">
-                Metadata
-                <span className="ml-2 text-xs text-[#858585] font-normal">(v1.0.3+)</span>
-              </dt>
+              <dt className="text-sm font-medium text-[#858585]">Metadata</dt>
               <dd className="sm:col-span-2">
                 {transaction.metadata && transaction.metadata.length > 0 ? (
                   <div className="space-y-2">

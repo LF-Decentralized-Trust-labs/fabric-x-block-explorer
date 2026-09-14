@@ -1,4 +1,4 @@
-# Loadgen configuration for testing metadata feature (v1.0.3+)
+# Loadgen configuration for testing metadata feature
 # This configuration generates transactions with various metadata sizes
 
 workload:

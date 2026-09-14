@@ -13,20 +13,20 @@ import (
 	"github.com/cockroachdb/errors"
 
 	"github.com/hyperledger/fabric-x-committer/utils/connection"
-	"github.com/hyperledger/fabric-x-committer/utils/dbconn"
 	"github.com/hyperledger/fabric-x-committer/utils/retry"
+	"github.com/hyperledger/fabric-x-committer/utils/statedb"
 )
 
 // DBConfig holds PostgreSQL connection configuration.
 type DBConfig struct {
-	User            string                   `mapstructure:"user"     yaml:"user"`
-	Password        string                   `mapstructure:"password" yaml:"password"`
-	DBName          string                   `mapstructure:"dbname"    yaml:"dbname"`
-	Endpoints       []*connection.Endpoint   `mapstructure:"endpoints" yaml:"endpoints"`
-	TLS             dbconn.DatabaseTLSConfig `mapstructure:"tls"       yaml:"tls"`
-	MaxConns        int32                    `mapstructure:"max_conns" yaml:"max_conns"`
-	MaxConnIdleTime time.Duration            `mapstructure:"max_conn_idle_time" yaml:"max_conn_idle_time"`
-	MaxConnLifetime time.Duration            `mapstructure:"max_conn_lifetime"  yaml:"max_conn_lifetime"`
+	User            string                 `mapstructure:"user"     yaml:"user"`
+	Password        string                 `mapstructure:"password" yaml:"password"`
+	DBName          string                 `mapstructure:"dbname"    yaml:"dbname"`
+	Endpoints       []*connection.Endpoint `mapstructure:"endpoints" yaml:"endpoints"`
+	TLS             statedb.TLSConfig      `mapstructure:"tls"       yaml:"tls"`
+	MaxConns        int32                  `mapstructure:"max_conns" yaml:"max_conns"`
+	MaxConnIdleTime time.Duration          `mapstructure:"max_conn_idle_time" yaml:"max_conn_idle_time"`
+	MaxConnLifetime time.Duration          `mapstructure:"max_conn_lifetime"  yaml:"max_conn_lifetime"`
 	// Retry controls exponential back-off when the initial DB connection fails.
 	Retry retry.Profile `mapstructure:"retry" yaml:"retry"`
 }

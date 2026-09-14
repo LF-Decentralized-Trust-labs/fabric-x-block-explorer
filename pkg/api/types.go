@@ -164,7 +164,7 @@ type Transaction struct {
 	TLSCertHash HexBytes   `json:"tls_cert_hash"`
 	CreatedAt   *time.Time `json:"created_at"`
 	// Metadata contains transaction execution metadata (array of hex-encoded byte arrays,
-	// introduced in committer v1.0.3).
+	// introduced in the Fabric-X transaction model).
 	// This field contains additional execution information that does not affect the world state.
 	Metadata     HexBytesArray    `json:"metadata,omitempty"`
 	Namespaces   []NamespaceRow   `json:"namespaces"`

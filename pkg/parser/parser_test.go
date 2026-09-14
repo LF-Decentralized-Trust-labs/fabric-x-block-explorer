@@ -22,6 +22,8 @@ import (
 	"github.com/LF-Decentralized-Trust-labs/fabric-x-block-explorer/pkg/util"
 )
 
+const testNamespace = "mycc"
+
 func TestParse(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -114,7 +116,7 @@ func TestParseContent(t *testing.T) {
 	t.Run("read-write and reads-only sets", func(t *testing.T) {
 		t.Parallel()
 		ns := &applicationpb.TxNamespace{
-			NsId:      "mycc",
+			NsId:      testNamespace,
 			NsVersion: 1,
 			ReadWrites: []*applicationpb.ReadWrite{
 				{Key: []byte("key1"), Value: []byte("value1"), Version: util.Ptr(uint64(10))},
@@ -141,7 +143,7 @@ func TestParseContent(t *testing.T) {
 		assert.Equal(t, "tx123", tx.TxID)
 		require.Len(t, tx.Namespaces, 1)
 		nsRec := tx.Namespaces[0]
-		assert.Equal(t, "mycc", nsRec.NsID)
+		assert.Equal(t, testNamespace, nsRec.NsID)
 		assert.Len(t, nsRec.ReadsOnly, 1)
 		assert.Equal(t, []byte("key2"), nsRec.ReadsOnly[0].Key)
 		assert.Len(t, nsRec.ReadWrites, 1)
@@ -172,7 +174,7 @@ func TestExtractPolicies(t *testing.T) {
 			}, marshalNamespacePolicies(t, &applicationpb.NamespacePolicies{
 				Policies: []*applicationpb.PolicyItem{
 					{
-						Namespace: "mycc",
+						Namespace: testNamespace,
 						Version:   1,
 						Policy:    []byte("policy_bytes"),
 					},
@@ -286,7 +288,7 @@ func TestParseTransactions(t *testing.T) {
 	t.Run("blind writes", func(t *testing.T) {
 		t.Parallel()
 		ns := &applicationpb.TxNamespace{
-			NsId: "mycc", NsVersion: 1,
+			NsId: testNamespace, NsVersion: 1,
 			BlindWrites: []*applicationpb.Write{
 				{Key: []byte("blind_key"), Value: []byte("blind_value")},
 			},
