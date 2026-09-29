@@ -79,7 +79,7 @@ services:
       - NEXT_PUBLIC_BACKEND_DISPLAY_URL=${NEXT_PUBLIC_BACKEND_DISPLAY_URL:-http://localhost:8080}
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --spider http://localhost:8080/healthz && wget --quiet --tries=1 --spider http://localhost:3000/api/health"]
+      test: ["CMD", "sh", "-c", "wget --quiet --tries=1 --spider http://localhost:8080/healthz && wget --quiet --tries=1 --spider http://localhost:8080/readyz && wget --quiet --tries=1 --spider http://localhost:3000/api/health"]
       interval: 10s
       timeout: 5s
       retries: 6

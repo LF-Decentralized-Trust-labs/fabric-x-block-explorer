@@ -53,6 +53,7 @@ func newValidationError(format string, args ...any) error {
 func (s *Service) newRESTRouter() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handleHealthz)
+	mux.HandleFunc("GET /readyz", s.handleReadyz)
 	mux.HandleFunc("GET /blocks/height", s.handleGetBlockHeight)
 	mux.HandleFunc("GET /blocks", s.handleListBlocks)
 	mux.HandleFunc("GET /blocks/{block_num}", s.handleGetBlockByNumber)
@@ -62,7 +63,20 @@ func (s *Service) newRESTRouter() http.Handler {
 	mux.HandleFunc("GET /openapi.yaml", s.handleOpenAPISpec)
 	mux.HandleFunc("GET /docs", handleSwaggerUI)
 	mux.HandleFunc("OPTIONS /", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
-	return corsMiddleware(loggingMiddleware(mux))
+	if s.metricsEnabled() {
+		mux.Handle("GET /metrics", s.metrics.Handler())
+	} else {
+		mux.HandleFunc("GET /metrics", http.NotFound)
+	}
+	return corsMiddleware(s.corsOrigins())(loggingMiddleware(mux))
+}
+
+// corsOrigins returns the configured CORS allow-list, falling back to ["*"].
+func (s *Service) corsOrigins() []string {
+	if s != nil && s.config != nil && len(s.config.Server.REST.CORSAllowedOrigins) > 0 {
+		return s.config.Server.REST.CORSAllowedOrigins
+	}
+	return []string{"*"}
 }
 
 // loggingMiddleware logs each HTTP request with method, path, status, and duration.
@@ -76,20 +90,47 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds permissive CORS headers so the REST API and Swagger UI
-// can be used from any browser origin (e.g. VS Code Simple Browser, localhost
-// dev tools, or a separate front-end dev server).
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+// corsMiddleware enforces the CORS allow-list from cfg.
+// When the list is empty or contains "*" all origins are reflected (open / dev mode).
+// Otherwise only matching origins receive Access-Control-Allow-Origin headers.
+func corsMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
+	isOpen := len(allowedOrigins) == 0
+	if !isOpen {
+		for _, o := range allowedOrigins {
+			if o == "*" {
+				isOpen = true
+				break
+			}
 		}
-		next.ServeHTTP(w, r)
-	})
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+			if isOpen {
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			} else if origin != "" && originAllowed(origin, allowedOrigins) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Vary", "Origin")
+			}
+			w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			if r.Method == http.MethodOptions {
+				w.WriteHeader(http.StatusNoContent)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// originAllowed reports whether origin appears in the allow-list.
+func originAllowed(origin string, allowed []string) bool {
+	for _, a := range allowed {
+		if a == origin {
+			return true
+		}
+	}
+	return false
 }
 
 // handleHealthz is a fast liveness probe — it returns 200 OK immediately
@@ -183,6 +224,11 @@ func (s *Service) handleListBlocks(w http.ResponseWriter, r *http.Request) {
 		respondError(w, newValidationError("offset must be >= 0"))
 		return
 	}
+	maxLimit := s.maxListLimit()
+	if limit > maxLimit {
+		respondError(w, newValidationError("limit must be <= %d", maxLimit))
+		return
+	}
 
 	toNum := to
 	if toNum == 0 {
@@ -254,6 +300,11 @@ func (s *Service) handleGetBlockByNumber(w http.ResponseWriter, r *http.Request)
 	}
 	if txOffset < 0 {
 		respondError(w, newValidationError("tx_offset must be >= 0"))
+		return
+	}
+	maxLimit := s.maxListLimit()
+	if txLimit > maxLimit {
+		respondError(w, newValidationError("tx_limit must be <= %d", maxLimit))
 		return
 	}
 
@@ -697,6 +748,14 @@ func (s *Service) defaultTxLimit() int32 {
 		return s.config.Server.REST.DefaultTxLimit
 	}
 	return config.DefaultTxLimit
+}
+
+// maxListLimit returns the configured cap on ?limit / ?tx_limit query parameters.
+func (s *Service) maxListLimit() int32 {
+	if s != nil && s.config != nil && s.config.Server.REST.MaxListLimit > 0 {
+		return s.config.Server.REST.MaxListLimit
+	}
+	return config.DefaultMaxListLimit
 }
 
 // --- HTTP helpers ---

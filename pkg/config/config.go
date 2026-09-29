@@ -78,6 +78,19 @@ type RESTConfig struct {
 	// drain before forcing a close. A zero value uses the package default.
 	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout" yaml:"shutdown_timeout"`
 	DefaultTxLimit  int32         `mapstructure:"default_tx_limit" yaml:"default_tx_limit"`
+	// MaxListLimit caps the ?limit / ?tx_limit query parameters on list endpoints.
+	// Requests exceeding this value receive HTTP 400. Zero uses DefaultMaxListLimit.
+	MaxListLimit int32 `mapstructure:"max_list_limit" yaml:"max_list_limit"`
+	// CORSAllowedOrigins is the list of origins permitted by the CORS middleware.
+	// An empty list or a list containing "*" allows all origins (open, for dev).
+	// In production set this to the exact UI origin, e.g. ["https://explorer.example.com"].
+	CORSAllowedOrigins []string `mapstructure:"cors_allowed_origins" yaml:"cors_allowed_origins"`
+	// StaleBlockThreshold is how long /readyz will tolerate no new block before
+	// returning 503 degraded. Zero disables the stale check entirely.
+	StaleBlockThreshold time.Duration `mapstructure:"stale_block_threshold" yaml:"stale_block_threshold"`
+	// MetricsEnabled controls whether the GET /metrics endpoint is registered.
+	// Defaults to true. Set to false for public-facing deployments.
+	MetricsEnabled bool `mapstructure:"metrics_enabled" yaml:"metrics_enabled"`
 }
 
 // Config is the top-level application configuration.

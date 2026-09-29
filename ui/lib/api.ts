@@ -2,7 +2,6 @@ import axios from 'axios';
 
 // Browser always hits the Next.js /api proxy — avoids CORS and host resolution issues in Docker
 export const API_BASE_URL = '/api';
-export const API_DISPLAY_URL = process.env.NEXT_PUBLIC_BACKEND_DISPLAY_URL || 'http://localhost:8080';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

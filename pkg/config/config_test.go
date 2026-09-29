@@ -207,19 +207,9 @@ func TestLoadFromFile(t *testing.T) {
 
 	t.Run("applies defaults for unset fields", func(t *testing.T) {
 		t.Parallel()
-		const sparse = `
-database:
-  endpoints:
-    - host: localhost
-      port: 5432
-  user: u
-  dbname: d
-sidecar:
-  connection:
-    endpoint:
-      host: localhost
-      port: 7052
-`
+		const sparse = "database:\n  endpoints:\n    - host: localhost\n      port: 5432\n" +
+			"  user: u\n  dbname: d\n" +
+			"sidecar:\n  connection:\n    endpoint:\n      host: localhost\n      port: 7052\n"
 		cfg, err := LoadFromFile(writeTempConfig(t, sparse))
 		require.NoError(t, err)
 
@@ -228,6 +218,24 @@ sidecar:
 		assert.Equal(t, DefaultProcessorCount, cfg.Workers.ProcessorCount)
 		assert.Equal(t, DefaultWriterCount, cfg.Workers.WriterCount)
 		assert.Equal(t, int32(DefaultDBMaxConns), cfg.DB.MaxConns)
+		// new REST defaults introduced in this branch
+		assert.Equal(t, DefaultMaxListLimit, cfg.Server.REST.MaxListLimit)
+		assert.Equal(t, []string{"*"}, cfg.Server.REST.CORSAllowedOrigins)
+	})
+
+	t.Run("parses max_list_limit and cors_allowed_origins from YAML", func(t *testing.T) {
+		t.Parallel()
+		const withREST = "database:\n  endpoints:\n    - host: localhost\n      port: 5432\n" +
+			"  user: u\n  dbname: d\n" +
+			"sidecar:\n  connection:\n    endpoint:\n      host: localhost\n      port: 7052\n" +
+			"server:\n  rest:\n    max_list_limit: 250\n    cors_allowed_origins:\n" +
+			"      - \"https://ui.example.com\"\n      - \"https://staging.example.com\"\n"
+		cfg, err := LoadFromFile(writeTempConfig(t, withREST))
+		require.NoError(t, err)
+
+		assert.Equal(t, int32(250), cfg.Server.REST.MaxListLimit)
+		wantOrigins := []string{"https://ui.example.com", "https://staging.example.com"}
+		assert.Equal(t, wantOrigins, cfg.Server.REST.CORSAllowedOrigins)
 	})
 
 	t.Run("returns error for missing file", func(t *testing.T) {

@@ -3,9 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Layers, FileText, Shield, Menu, X, ChevronRight, Cpu } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { API_DISPLAY_URL } from '@/lib/api';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
@@ -17,6 +16,16 @@ const navigation = [
 export function Sidebar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [backendUrl, setBackendUrl] = useState('');
+
+  // Fetch the real backend URL from the server at runtime so it always reflects
+  // the actual BACKEND_URL env var, even inside a pre-built Docker image.
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((data) => setBackendUrl(data.backendUrl ?? ''))
+      .catch(() => setBackendUrl(''));
+  }, []);
 
   return (
     <>
@@ -85,7 +94,7 @@ export function Sidebar() {
             </p>
             <div className="mt-2 flex items-start gap-2 text-sm font-medium text-[#e8e8e8]">
               <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#007acc]" />
-              <p className="break-all leading-5">{API_DISPLAY_URL}</p>
+              <p className="break-all leading-5">{backendUrl || '…'}</p>
             </div>
           </div>
         </div>

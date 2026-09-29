@@ -17,6 +17,18 @@ CONFIG_PATH="${EXPLORER_CONFIG_PATH:-/home/explorer/config.yaml}"
 
 echo "Starting Fabric-X Block Explorer backend on :8080"
 /bin/explorer start --config "${CONFIG_PATH}" &
+BACKEND_PID=$!
+
+# Watchdog: if the Go backend exits unexpectedly, kill PID 1 so the container
+# transitions to exited/restarting and the orchestrator can page and restart it.
+watch_backend() {
+  while kill -0 "$BACKEND_PID" 2>/dev/null; do
+    sleep 5
+  done
+  echo "ERROR: explorer backend (PID $BACKEND_PID) exited unexpectedly — killing container" >&2
+  kill 1
+}
+watch_backend &
 
 echo "Starting Fabric-X Block Explorer UI on :3000"
 exec node /app/server.js

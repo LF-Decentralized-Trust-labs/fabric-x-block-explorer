@@ -23,6 +23,11 @@ const (
 	DefaultDBMaxConnIdleTime = 5 * time.Minute
 	DefaultDBMaxConnLifetime = 1 * time.Hour
 	DefaultTxLimit           = 50
+	DefaultMaxListLimit      = int32(500)
+	// DefaultStaleBlockThreshold disables the /readyz pipeline stale check by default.
+	DefaultStaleBlockThreshold = time.Duration(0)
+	// DefaultMetricsEnabled exposes /metrics by default.
+	DefaultMetricsEnabled    = true
 	DefaultReadHeaderTimeout = 5 * time.Second
 	DefaultRollbackTimeout   = 5 * time.Second
 	DefaultReadTimeout       = 60 * time.Second
@@ -58,6 +63,10 @@ func newViperWithDefaults() *viper.Viper {
 	v.SetDefault("database.retry.max-interval", DefaultRetryMaxInterval)
 	v.SetDefault("database.retry.max-elapsed-time", DefaultRetryMaxElapsedTime)
 	v.SetDefault("server.rest.default_tx_limit", DefaultTxLimit)
+	v.SetDefault("server.rest.max_list_limit", DefaultMaxListLimit)
+	v.SetDefault("server.rest.cors_allowed_origins", []string{"*"})
+	v.SetDefault("server.rest.stale_block_threshold", DefaultStaleBlockThreshold)
+	v.SetDefault("server.rest.metrics_enabled", DefaultMetricsEnabled)
 	v.SetDefault("server.rest.read_header_timeout", DefaultReadHeaderTimeout)
 	v.SetDefault("server.rest.read_timeout", DefaultReadTimeout)
 	v.SetDefault("server.rest.write_timeout", DefaultWriteTimeout)
